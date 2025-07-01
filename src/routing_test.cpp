@@ -19,15 +19,17 @@ using namespace boost::numeric::odeint;
 
 
 // Tasks to be completed:
-// 2. Add index for resolution to the RHS function to avoid recalculating the index for each time step.
-// 3. Add time calculation for dates from start time
-// 4. Add a res function to handle the reservoir routing (place holder).
-// 5. Add ability to output from list of LinkIDs (stream IDs) to a netcdf file.
-// 6. Add reading user inputs from yaml. 
-// 7. Add checks for:
+// 1. Add index for resolution to the RHS function to avoid recalculating the index for each time step.
+// 2. Add time calculation for dates from start time
+// 
+// 3. Add a res function to handle the reservoir routing (place holder).
+// 4. Add reading user inputs from yaml. 
+// 5. Add checks for:
 //   - If the initial conditions are valid for the given links.
 //   - If the boundary conditions are valid for the entire simulation time.
-// 8. Move all parts of main to functions to improve readability and maintainability.
+//   - If parameters are valid
+//   - If the link list is valid and contains links that are present in the node levels file.
+// 6. Move all parts of main to functions to improve readability and maintainability.
 
 int main()
 {   
@@ -53,16 +55,16 @@ int main()
     }
     std::cout << "__________________________________________________ \n" << std::endl;
 
-    // ----------------- STARTING ROUTING --------------------------------------
-    std::cout << "_________________STARTING ROUTING_________________ \n" << std::endl;
+    // ----------------- SETUP --------------------------------------
+    std::cout << "_________________MODEL SET UP_____________________ \n" << std::endl;
 
-    // ----------------- INPUTS --------------------------------------
+    // INPUTS --------------------------------------
 
     // Read node levels from CSV file
     std::cout << "Reading node levels and parameters from CSV...";
     std::unordered_map<size_t, NodeInfo> node_map;
     std::map<size_t, std::vector<size_t>> level_groups;
-    std::string node_levels_filename = "../data/node_levels_params.csv"; //user input 
+    std::string node_levels_filename = "../data/node_levels_params_small.csv"; //user input 
     read_node_levels(node_levels_filename, node_map, level_groups);
     size_t n_links = node_map.size(); //number of links used for allocating results
     std::cout << "completed!" << std::endl;
@@ -96,6 +98,21 @@ int main()
                                                     boundary_conditions_id_varname); 
     }
     std::cout << "completed!" << std::endl;
+
+    // OUTPUT OPTIONS------------------------
+    std::cout << "Setting up output options...";
+    int output_flag = 2; //0 for no output, 1 for subset by level, 2 subset by list (user input)
+    int min_level = 4; // user input for minimum level to keep links (if flag is 2)
+    std::string link_list_filename = "/scratch/gpfs/GVILLARI/am2192/routing/mylinks.csv"; // user input for list of links to keep
+    SaveInfo save_info;
+    if(output_flag == 2) save_info = readSaveList(link_list_filename); //read the save list from file
+    std::string series_filepath = "/scratch/gpfs/GVILLARI/am2192/routing/output/series"; // user input
+    std::string snapshot_filepath = "/scratch/gpfs/GVILLARI/am2192/routing/output/snapshot"; // user input
+    std::cout << "completed!" << std::endl;
+    std::cout << "__________________________________________________ \n" << std::endl;
+
+    // ----------------- STARTING ROUTING --------------------------------------
+    std::cout << "_________________STARTING ROUTING_________________ \n" << std::endl;
 
     // TIME CHUNKING STARTS HERE ------------------------------------------
     int input_flag = 1; // 0 for single file with time chunks, 1 for multiple files without time chunks (user input)
@@ -242,37 +259,65 @@ int main()
         std::chrono::duration<double> elapsed = end - start;
         std::cout << "  Total integration time: " << elapsed.count() << " seconds" << std::endl;
 
+        // Update total time steps for the next chunk
+        total_time_steps += tf; //time in minutes for this chunk
+
 
         // -----------OUTPUT --------------------------------------------
 
-        // Process results for output
-        std::cout << "  Processing results for output...";
-
-        // Get final time step for all links
+        // SNAPSHOT OUTPUT
+        std::cout << "  Writing final time series (snapshot) to netcdf...";
+        // Get final time step for all links for the snapshot
         std::vector<int> stream_ids(n_links);
         size_t last_step = n_steps - 1;
         for(size_t i_link = 0; i_link < n_links; ++i_link) {
             q_final[i_link] = results[last_step * n_links + i_link];
             stream_ids[i_link] = node_map.at(i_link).stream_id;
         }
-
-        // subset for level 2 and above:
-        int min_level = 4; // user input for minimum level to keep links
-        if (min_level < 2) {
-            int min_level = 2; // Ensure minimum level is at least 2
+        // Snapshot output
+        std::string snapshot_filename = snapshot_filepath + std::to_string(tc + 1) + ".nc"; // append chunk number to filename
+        write_snapshot_netcdf(snapshot_filename, 
+                              q_final.data(), 
+                              stream_ids.data(),
+                              n_links);
+        std::cout << "  completed!" << std::endl;
+        
+        
+        //TIME SERIES OUTPUT
+        if (output_flag == 0) {
+            // No output
+            std::cout << "No output requested." << std::endl;
+            continue; // Skip to next chunk
         }
-        // Step 1: Collect indices of links to keep (those with level >= min_level)
+
+        // Output time series based on user-defined output flag
+        // If output_flag is 1, 2 we write the time series to netcdf
+        std::cout << "  Writing time series to netcdf...";
         std::vector<size_t> keep_indices;
         std::vector<int> keep_links;
-        for (const auto& [id, node] : node_map) {
-            if (node.level >= min_level) { //user input 
-                keep_indices.push_back(node.index);
-                keep_links.push_back(node.stream_id);
+        if (output_flag == 1) {
+            std::cout << "Outputting subset by level >= " << min_level << "...";
+            if(min_level < 1) min_level = 1; // Ensure min_level is at least 1
+            for (const auto& [id, node] : node_map) {
+                if (node.level >= min_level) { //user input 
+                    keep_indices.push_back(node.index);
+                    keep_links.push_back(node.stream_id);
+                }
             }
         }
-        size_t n_keep_links = keep_indices.size();
-
+        else if (output_flag == 2) {
+            // Output subset by list (save only above level 0)
+            std::cout << "Outputting subset by list...";
+            for (const auto& [id, node] : node_map) {
+                if (node.level > 0 && save_info.stream_ids.count(node.stream_id)) { 
+                    keep_indices.push_back(node.index);
+                    keep_links.push_back(node.stream_id);
+                }
+            }
+        }
+        
         // Step 2: Compact results in-place
+        size_t n_keep_links = keep_indices.size();
         size_t write_pos = 0;
         for (size_t t = 0; t < n_steps; ++t) {
             for (size_t link_index : keep_indices) {
@@ -283,40 +328,18 @@ int main()
             }
         }
         results.resize(n_steps * keep_indices.size()); //Resize results to new size
-        std::cout << "  completed!" << std::endl;
-
 
         // Save to netcdf
-        std::cout << "  Writing results to NetCDF...";
-
-        std::string series_filename = "/scratch/gpfs/GVILLARI/am2192/routing/output/series"; // user input
-        series_filename += std::to_string(tc + 1) + ".nc"; // append chunk number to filename
-
-        std::string snapshot_filename = "/scratch/gpfs/GVILLARI/am2192/routing/output/snapshot"; // user input
-        snapshot_filename += std::to_string(tc + 1) + ".nc"; // append chunk number to filename
-        
-        int compression_level=0;
-        // Dump time series to netcdf41321
+        std::string series_filename = series_filepath + std::to_string(tc + 1) + ".nc"; // append chunk number to filename
         write_timeseries_netcdf(series_filename,
                             results.data(),
                             times.data(),
                             keep_links.data(),
                             n_steps,
-                            n_keep_links,
-                            compression_level);    
-        // Snapshot output
-        write_snapshot_netcdf(snapshot_filename, 
-                              q_final.data(), 
-                              stream_ids.data(),
-                              n_links,
-                              compression_level);
+                            n_keep_links);    
+
 
         std::cout << "completed!" << std::endl;
-
-        // Update total time steps
-        total_time_steps += tf; //time in minutes for this chunk
-
-
     }
 
     // ----------------- END OF ROUTING --------------------------------------

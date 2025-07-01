@@ -3,7 +3,20 @@
 #include <netcdf.h>
 #include <string>
 #include <iostream>
-#include <vector>
+// #include <vector>
+#include <unordered_set>
+
+
+/**
+ * @brief Read a save list from a file and return the stream IDs.
+ */
+
+ struct SaveInfo{
+    std::unordered_set<int> stream_ids;
+ };
+
+ SaveInfo readSaveList(const std::string& filename);
+
 
 
 /**

@@ -2,6 +2,7 @@
 #include <netcdf.h>
 #include <string>
 #include <iostream>
+#include <fstream>
 #include <vector>
 
 
@@ -14,6 +15,26 @@ do { \
     } \
 } while (0)
 
+
+/**
+ * @brief Read a save list from a file and return the first stream ID.
+ */
+SaveInfo readSaveList(const std::string& filename) {
+    SaveInfo save_info;
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open: " + filename);
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        if (!line.empty()) {
+            int id = std::stoi(line);
+            save_info.stream_ids.insert(id);
+        }
+    }
+    return save_info;
+}
 
 /**
  * @brief Write a streamflow array to a NetCDF file with optional compression.
