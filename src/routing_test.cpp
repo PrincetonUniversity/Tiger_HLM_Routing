@@ -21,15 +21,15 @@ using namespace boost::numeric::odeint;
 // Tasks to be completed:
 // 1. Add index for resolution to the RHS function to avoid recalculating the index for each time step.
 // 2. Add time calculation for dates from start time
-// 
-// 3. Add a res function to handle the reservoir routing (place holder).
-// 4. Add reading user inputs from yaml. 
-// 5. Add checks for:
+// 3. Add calendar and time to the output netcdf files.
+// 4. Add a res function to handle the reservoir routing (place holder).
+// 5. Add reading user inputs from yaml. 
+// 6. Add checks for:
 //   - If the initial conditions are valid for the given links.
 //   - If the boundary conditions are valid for the entire simulation time.
 //   - If parameters are valid
 //   - If the link list is valid and contains links that are present in the node levels file.
-// 6. Move all parts of main to functions to improve readability and maintainability.
+// 7. Move all parts of main to functions to improve readability and maintainability.
 
 int main()
 {   
