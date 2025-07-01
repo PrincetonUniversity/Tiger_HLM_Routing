@@ -8,6 +8,17 @@
 
 using namespace boost::numeric::odeint;
 
+/**
+ * @brief Right-hand side function for the nonlinear routing ODE.
+ * This function computes the rate of change of discharge (dQdt) based on the current discharge (q),
+ * runoff, inflow from parent nodes, hillslope area, and routing parameters.
+ * @param q Current discharge (m^3/s).
+ * @param dQdt Rate of change of discharge (m^3/s^2).
+ * @param t Current time (in minutes).
+ * @note The function assumes that the inputs are provided in hourly resolution and converts them to the
+ * appropriate units for the calculations. The runoff is converted from mm/h to m/min. (will change by adding index for resolution)
+ */
+
 struct RHS {
     const float* runoff_series; // runoff, hourly
     const std::vector<double>& y_p_series; // inflow from parent nodes, hourly (for now)

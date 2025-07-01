@@ -19,7 +19,6 @@ using namespace boost::numeric::odeint;
 
 
 // Tasks to be completed:
-// 1. Move RHS to a separate file.
 // 2. Add index for resolution to the RHS function to avoid recalculating the index for each time step.
 // 3. Add time calculation for dates from start time
 // 4. Add a res function to handle the reservoir routing (place holder).
