@@ -7,13 +7,19 @@ CXXFLAGS := -O3 -march=native -ffast-math -funroll-loops -fopenmp -DNDEBUG -std=
 LDFLAGS := -lboost_system -L${NETCDF_PATH}/lib64 -lnetcdf
 
 # ==== Project Files ====
-SRC := routing_test.cpp\
-	   I_O/node_info.cpp \
-	   I_O/output_series.cpp \
-	   I_O/inputs.cpp
-	   
-OBJ := $(SRC:.cpp=.o)
-BIN := routing
+SRC := routing_test.cpp \
+       I_O/node_info.cpp \
+       I_O/output_series.cpp \
+       I_O/inputs.cpp
+
+# ==== Build directory ====
+BUILD_DIR := build
+
+# ==== Object files in build dir ====
+OBJ := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(SRC))
+
+# ==== Binary in build dir ====
+BIN := $(BUILD_DIR)/routing
 
 # ==== Default Target ====
 all: $(BIN)
@@ -23,19 +29,12 @@ $(BIN): $(OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
 # ==== Compile Source Files ====
-%.o: %.cpp
+$(BUILD_DIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
-
 
 # ==== Clean Target ====
 clean:
-	rm -f $(OBJ) $(BIN)
-
-# ==== Future Targets ====
-# test: Run unit tests
-# bench: Benchmark performance
-# debug: Compile with debugging symbols
-# install: Install to system
-# doc: Generate documentation
+	rm -rf $(BUILD_DIR)
 
 .PHONY: all clean
