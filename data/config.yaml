@@ -1,0 +1,50 @@
+model:
+  id: 101
+
+Time:
+  start_date: 1981-01-01 00:00:00
+  calendar: "no_leap"
+
+Solver:
+  dt: 1.0
+  rtol: 1e-9
+  atol: 1e-6
+
+Parameters:
+  node_file: "node_levels.csv"
+
+Initial_Conditions:
+  flag: 0 # 0 for constant, 1 for netcdf
+  initial_Q: 1.0
+  filename: 'snapshot.nc' #only for flag 1
+  varname: "snapshot" #only for flag 1
+  id_varname: "LinkID" #only for flag 1
+
+Boundary_Conditions:
+  flag: 0 #0 no BC. 1 for netcdf of time series to use as parents
+  folder: "/scratch/BC.nc"
+  varname: "BC" #only for flag 1
+  id_varname: "LinkID" #only for flag 1
+  resolution: 60
+
+Runoff:
+  flag: 0 #0 for single file netcdf; 1 for multiple
+  folder: "/scratch/runoff.nc" # for 0 specify file, for 1 specify path to list of files
+  varname: "runoff" #only for flag 1
+  id_varname: "LinkID" #only for flag 1
+  resolution: 60
+  chunk_size: 100  # not needed for multiple files
+
+Reservoir:
+  id: 100 #Reservoir model ID
+  flag: 0 # 0 = no reservoirs, 1 use reservoirs
+  res_file: '/scratch/myreslist.csv' #list of IDs which have reservoirs
+
+Output:
+  flag: 0 # 0 for no output, 1 for all output, 2 for subset by level, 3 subset by list
+  link_list: "mylinks.csv"
+  filename: "/scratch/mytimeseries" #in code add _time_chunk.nc streamflow_1981-01-01-00:00:00.nc <- add this format
+
+Snapshot:
+  flag: 0 # 0 for no output, 1 for end time only, 2 for each chunk
+  folder: '/scratch/snapshot' #create snapshot_{time}.nc ex: snapshot_1981-01-01-00:00:00.nc <- add this format
