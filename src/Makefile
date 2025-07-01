@@ -10,7 +10,9 @@ LDFLAGS := -lboost_system -L${NETCDF_PATH}/lib64 -lnetcdf
 SRC := routing_test.cpp \
        I_O/node_info.cpp \
        I_O/output_series.cpp \
-       I_O/inputs.cpp
+       I_O/inputs.cpp \
+	   utils/time.cpp
+
 
 # ==== Build directory ====
 BUILD_DIR := build

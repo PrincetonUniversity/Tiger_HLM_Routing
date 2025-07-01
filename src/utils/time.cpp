@@ -11,7 +11,7 @@ std::tm parseTime(const std::string& datetime) {
 
 std::string formatTime(const std::tm& tm) {
     char buffer[30];
-    std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &tm);
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%d_%H_%M_%S", &tm);
     return std::string(buffer);
 }
 

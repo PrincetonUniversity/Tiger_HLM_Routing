@@ -11,6 +11,7 @@
 #include "I_O/output_series.hpp"
 #include "I_O/inputs.hpp"
 #include "models/RHS.hpp"
+#include "utils/time.hpp"
 
 
 // C++ standard libraries
@@ -20,7 +21,6 @@ using namespace boost::numeric::odeint;
 
 // Tasks to be completed:
 // 1. Add index for resolution to the RHS function to avoid recalculating the index for each time step.
-// 2. Add time calculation for dates from start time
 // 3. Add calendar and time to the output netcdf files.
 // 4. Add a res function to handle the reservoir routing (place holder).
 // 5. Add reading user inputs from yaml. 
@@ -135,10 +135,18 @@ int main()
     // keep tract of total simulation time
     size_t total_time_steps = 0; // total time steps across all chunks
 
+    // Start time
+    std::string start_time = "2010-01-01 00:00:00"; // user input for start time
+    std::string calendar = "julian"; // user input for calendar type (julian or no_leap)
+
     //need to define q_final to store final results for each link
     for(int tc = 0; tc < runoff_info.nchunks; ++tc){ // Loop over time chunks or multiple files
         std::cout << "Processing chunk/file " << tc + 1 << " of " << runoff_info.nchunks << ":" << std::endl;
         size_t startIndex = tc * chunk_size; // start index for this chunk (need to set default chunk size for when no time chunking)
+
+        //time string to store the start time for this chunk
+        std::string time_string = addTimeDelta(start_time, calendar, total_time_steps);
+        std::cout << "  Start time for this chunk: " << time_string << std::endl;
 
 
         // ----------------- RUNOFF DATA --------------------------------------
@@ -275,7 +283,7 @@ int main()
             stream_ids[i_link] = node_map.at(i_link).stream_id;
         }
         // Snapshot output
-        std::string snapshot_filename = snapshot_filepath + std::to_string(tc + 1) + ".nc"; // append chunk number to filename
+        std::string snapshot_filename = snapshot_filepath + "_" + time_string + ".nc"; // append chunk number to filename
         write_snapshot_netcdf(snapshot_filename, 
                               q_final.data(), 
                               stream_ids.data(),
@@ -330,7 +338,7 @@ int main()
         results.resize(n_steps * keep_indices.size()); //Resize results to new size
 
         // Save to netcdf
-        std::string series_filename = series_filepath + std::to_string(tc + 1) + ".nc"; // append chunk number to filename
+        std::string series_filename = series_filepath + "_" + time_string + ".nc"; // append chunk number to filename
         write_timeseries_netcdf(series_filename,
                             results.data(),
                             times.data(),
