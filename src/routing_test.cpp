@@ -64,7 +64,7 @@ int main()
     std::cout << "Reading node levels and parameters from CSV...";
     std::unordered_map<size_t, NodeInfo> node_map;
     std::map<size_t, std::vector<size_t>> level_groups;
-    std::string node_levels_filename = "../data/node_levels_params_small.csv"; //user input 
+    std::string node_levels_filename = "../data/node_levels_params.csv"; //user input 
     read_node_levels(node_levels_filename, node_map, level_groups);
     size_t n_links = node_map.size(); //number of links used for allocating results
     std::cout << "completed!" << std::endl;
@@ -152,7 +152,7 @@ int main()
         // ----------------- RUNOFF DATA --------------------------------------
 
         // Runoff data
-        std::cout << "  Read in runoff from netcdf file..." << runoff_info.filenames[tc] << "...";
+        std::cout << "  Reading in runoff from netcdf file: " << runoff_info.filenames[tc] << "...";
         RunoffData runoff = readTotalRunoff(input_flag,
                                             runoff_info.filenames[tc], 
                                             runoff_varname, 
@@ -274,7 +274,7 @@ int main()
         // -----------OUTPUT --------------------------------------------
 
         // SNAPSHOT OUTPUT
-        std::cout << "  Writing final time series (snapshot) to netcdf...";
+        std::cout << "  Writing final time step (snapshot) to netcdf...";
         // Get final time step for all links for the snapshot
         std::vector<int> stream_ids(n_links);
         size_t last_step = n_steps - 1;
@@ -344,16 +344,20 @@ int main()
                             times.data(),
                             keep_links.data(),
                             n_steps,
-                            n_keep_links);    
+                            n_keep_links,
+                            calendar,
+                            time_string);    
 
 
         std::cout << "completed!" << std::endl;
     }
+    std::cout << "__________________________________________________ \n" << std::endl;
 
     // ----------------- END OF ROUTING --------------------------------------
     std::cout << "_________________END OF ROUTING__________________ \n" << std::endl;
     std::cout << "Routing completed successfully!" << std::endl;
     std::cout << "Thank you for using Tiger HLM routing!" << std::endl;
+    std::cout << "__________________________________________________ \n" << std::endl;
 
     
     return 0;

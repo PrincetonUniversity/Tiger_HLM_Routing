@@ -36,6 +36,8 @@ void write_timeseries_netcdf(const std::string& filename,
                         const int* linkid_vals,
                         int n_steps,
                         int n_links,
+                        const std::string calendar_str,
+                        const std::string time_string,
                         int compression_level = 0);
 
 /**
