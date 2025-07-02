@@ -7,11 +7,12 @@ CXXFLAGS := -O3 -march=native -ffast-math -funroll-loops -fopenmp -DNDEBUG -std=
 LDFLAGS := -lboost_system -L${NETCDF_PATH}/lib64 -lnetcdf
 
 # ==== Project Files ====
-SRC := routing_test.cpp \
+SRC := main.cpp \
        I_O/node_info.cpp \
        I_O/output_series.cpp \
        I_O/inputs.cpp \
-	   utils/time.cpp
+       I_O/config_loader.cpp \
+       utils/time.cpp
 
 
 # ==== Build directory ====

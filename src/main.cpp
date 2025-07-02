@@ -2,7 +2,6 @@
 #include <fstream>
 #include <vector>
 #include <utility>
-// #include <cmath> // Required for pow
 #include <boost/numeric/odeint.hpp>
 #include <omp.h>
 
@@ -10,6 +9,7 @@
 #include "I_O/node_info.hpp"
 #include "I_O/output_series.hpp"
 #include "I_O/inputs.hpp"
+#include "I_O/config_loader.hpp"
 #include "models/RHS.hpp"
 #include "utils/time.hpp"
 
@@ -20,7 +20,6 @@ using namespace boost::numeric::odeint;
 
 
 // Tasks to be completed:
-// 5. Add reading user inputs from yaml. 
 // 6. Add checks for:
 //   - If the initial conditions are valid for the given links.
 //   - If the boundary conditions are valid for the entire simulation time.
@@ -56,32 +55,29 @@ int main()
     std::cout << "_________________MODEL SET UP_____________________ \n" << std::endl;
 
     // INPUTS --------------------------------------
-    
     // Read user inputs from YAML file
     std::cout << "Loading user inputs from YAML file...";
-    std::string config_filename = "../data/config.yaml"; //user input
+    ModelConfig config = ConfigLoader::loadConfig("../data/config.yaml");
     std::cout << "completed!" << std::endl;
-
 
     // Read node levels from CSV file
     std::cout << "Loading network parameters...";
     std::unordered_map<size_t, NodeInfo> node_map;
     std::map<size_t, std::vector<size_t>> level_groups;
-    std::string node_levels_filename = "../data/node_levels_params.csv"; //user input 
-    read_node_levels(node_levels_filename, node_map, level_groups);
+    read_node_levels(config.parameters_file, node_map, level_groups);
     size_t n_links = node_map.size(); //number of links used for allocating results
     std::cout << "completed!" << std::endl;
 
 
     // Initial conditions (optional, can be set to a constant value)
     std::cout << "Loading initial conditions...";
-    int initial_conditions_flag = 0; // 0 for constant value, 1 for reading from file
+    // int initial_conditions_flag = 0; // 0 for constant value, 1 for reading from file
     float initial_value = 1.0; // constant value for q0
     // If reading from file, set the filename, variable name, and ID variable name
     std::string initial_conditions_filename = "/scratch/gpfs/GVILLARI/am2192/snapshot.nc"; //user input 
     std::string initial_conditions_varname = "snapshot"; //user input 
     std::string initial_conditions_id_varname = "LinkID"; //user input 
-    auto uini = loadInitialConditions(initial_conditions_flag,
+    auto uini = loadInitialConditions(config.initial_conditions_flag,
                                      initial_value, initial_conditions_filename, 
                                      initial_conditions_varname, 
                                      initial_conditions_id_varname);
@@ -129,12 +125,12 @@ int main()
     int input_flag = 1; // 0 for single file with time chunks, 1 for multiple files without time chunks (user input)
     int runoff_resolution = 60; // resolution in minutes (user input)
     size_t chunk_size = 2000; // size of each time chunk in hours (user input)
-    std::string path = "/scratch/gpfs/GVILLARI/am2192/routing/data/"; ///scratch/gpfs/GVILLARI/am2192/routing/total_runoff_test.nc
+    std::string runoff_path = "/scratch/gpfs/GVILLARI/am2192/routing/data/"; ///scratch/gpfs/GVILLARI/am2192/routing/total_runoff_test.nc
     std::string runoff_varname = "ro"; //user input 
     std::string runoff_id_varname = "LinkID"; //user input 
 
     // Get runoff chunk info
-    RunoffChunkInfo runoff_info = getRunoffChunkInfo(path, input_flag, chunk_size);
+    RunoffChunkInfo runoff_info = getRunoffChunkInfo(runoff_path, input_flag, chunk_size);
 
     //define q_final to store final results for each link
     std::vector<float> q_final(n_links); //updated each loop
