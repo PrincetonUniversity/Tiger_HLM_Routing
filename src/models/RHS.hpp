@@ -1,5 +1,4 @@
-#ifndef RHS_HPP
-#define RHS_HPP
+#pragma once
 
 #include <vector>
 #include <algorithm> // for std::max
@@ -67,5 +66,3 @@ typedef runge_kutta_dopri5<
     double, double, double, double,
     vector_space_algebra, default_operations, never_resizer
 > stepper_type;
-
-#endif // RHS_HPP

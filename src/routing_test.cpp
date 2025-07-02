@@ -2,7 +2,7 @@
 #include <fstream>
 #include <vector>
 #include <utility>
-#include <cmath> // Required for pow
+// #include <cmath> // Required for pow
 #include <boost/numeric/odeint.hpp>
 #include <omp.h>
 
@@ -20,7 +20,6 @@ using namespace boost::numeric::odeint;
 
 
 // Tasks to be completed:
-// 4. Add a res function to handle the reservoir routing (place holder).
 // 5. Add reading user inputs from yaml. 
 // 6. Add checks for:
 //   - If the initial conditions are valid for the given links.
@@ -57,6 +56,12 @@ int main()
     std::cout << "_________________MODEL SET UP_____________________ \n" << std::endl;
 
     // INPUTS --------------------------------------
+    
+    // Read user inputs from YAML file
+    std::cout << "Loading user inputs from YAML file...";
+    std::string config_filename = "../data/config.yaml"; //user input
+    std::cout << "completed!" << std::endl;
+
 
     // Read node levels from CSV file
     std::cout << "Loading network parameters...";
