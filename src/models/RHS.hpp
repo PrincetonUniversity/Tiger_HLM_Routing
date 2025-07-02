@@ -21,32 +21,40 @@ using namespace boost::numeric::odeint;
 
 struct RHS {
     const float* runoff_series; // runoff, hourly
+    const size_t runoff_resolution; // resolution in minutes for runoff_series
     const std::vector<double>& y_p_series; // inflow from parent nodes, hourly (for now)
+    const size_t y_p_resolution; // resolution in minutes for y_p_series
     const double A_h; // hillslope area in m^2
     const double lambda_1; // exponent
     const double invtau; // constant term
 
     RHS(const float* runoff_series,
+        const size_t runoff_resolution,
         const std::vector<double>& y_p_series,
+        const size_t y_p_resolution,
         const double A_h, 
         const double lambda_1, 
         const double invtau
     )
     : runoff_series(runoff_series),
+      runoff_resolution(runoff_resolution),
       y_p_series(y_p_series),
+      y_p_resolution(y_p_resolution),
       A_h(A_h),
       lambda_1(lambda_1),
       invtau(invtau) {}
 
     inline void operator()(const double q, double& dQdt, const double t) const {
-        // t is in minutes, inputs are in hours 
-        size_t hour_idx = static_cast<size_t>(t / 60);  // assumes t in minutes 
+        // calculate index for runoff and y_p series based on time t
+        // Assuming t is in minutes, convert to hours for indexing
+        size_t runoff_idx = static_cast<size_t>(t / runoff_resolution); // assumes t
+        size_t y_p_idx = static_cast<size_t>(t / y_p_resolution); // assumes t is in minutes
 
-        // runoff_series is hourly 
-        double runoff = runoff_series[hour_idx] * (0.001 / 60); // mm/h to m/min
+        // runoff_series is hourly
+        double runoff = runoff_series[runoff_idx] * (0.001 / 60); // mm/h to m/min
 
         // y_p is hourly — 60 minutes per step
-        double y_p = y_p_series[hour_idx];
+        double y_p = y_p_series[y_p_idx];
 
         // Nonlinear routing ODE
         double q_safe = std::max(q, 1e-8); // avoid division by zero

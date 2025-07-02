@@ -20,8 +20,6 @@ using namespace boost::numeric::odeint;
 
 
 // Tasks to be completed:
-// 1. Add index for resolution to the RHS function to avoid recalculating the index for each time step.
-// 3. Add calendar and time to the output netcdf files.
 // 4. Add a res function to handle the reservoir routing (place holder).
 // 5. Add reading user inputs from yaml. 
 // 6. Add checks for:
@@ -194,6 +192,7 @@ int main()
                 // Initialize the inflow series (y_p_series) for this link
                 // This will be used to store inflow from parent nodes or boundary conditions
                 std::vector<double> y_p_series(n_steps, 0.0);
+                size_t y_p_resolution =  simulation_resolution; // resolution in minutes for y_p_series
 
                 bool has_bc = (boundary_conditions_flag == 1) &&
                             (boundary_conditions.idToIndex.find(node.stream_id) != boundary_conditions.idToIndex.end());
@@ -202,7 +201,7 @@ int main()
                     size_t bc_index = boundary_conditions.idToIndex.at(node.stream_id);
                     size_t nTime = boundary_conditions.nTime;
                     size_t t_start = total_time_steps/boundary_conditions_resolution; // Convert total_time_steps to hours
-
+                    y_p_resolution = boundary_conditions_resolution; // resolution in minutes for y_p_series if boundary conditions are used
                     for (size_t t = t_start; t < n_steps; ++t) {
                         y_p_series[t] = static_cast<double>(
                             boundary_conditions.data[bc_index * nTime + t]
@@ -244,7 +243,7 @@ int main()
                         results[idx * n_links + node.index] = x;
                 };
 
-                RHS rhs(runoff_ptr, y_p_series,A_h,lambda_1,invtau);
+                RHS rhs(runoff_ptr, runoff_resolution, y_p_series, y_p_resolution,A_h,lambda_1,invtau);
                 auto stepper = make_controlled(1E-9, 1E-6, stepper_type());
                 integrate_times(stepper, rhs, q0, times.begin(), times.end(), dt, callback);
 
