@@ -33,7 +33,6 @@ Runoff:
   chunk_size: 100  # not needed for multiple files
 
 Reservoir:
-  id: 100 #Reservoir model ID
   flag: 0 # 0 = no reservoirs, 1 use reservoirs
   res_file: '/scratch/myreslist.csv' #list of IDs which have reservoirs
 

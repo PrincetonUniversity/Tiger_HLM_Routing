@@ -59,7 +59,7 @@ int main()
     // INPUTS --------------------------------------
 
     // Read node levels from CSV file
-    std::cout << "Reading node levels and parameters from CSV...";
+    std::cout << "Loading network parameters...";
     std::unordered_map<size_t, NodeInfo> node_map;
     std::map<size_t, std::vector<size_t>> level_groups;
     std::string node_levels_filename = "../data/node_levels_params.csv"; //user input 
@@ -83,7 +83,7 @@ int main()
     std::cout << "completed!" << std::endl;
 
     //read boundary conditions from file if they exist
-    std::cout << "Reading boundary conditions from file...";
+    std::cout << "Loading boundary condition...";
     int boundary_conditions_flag = 0; // 0 for no boundary conditions, 1 for reading from file for whole simulation
     int boundary_conditions_resolution = 60; // resolution in minutes (user input)
     std::string boundary_conditions_filename = "/scratch/gpfs/GVILLARI/am2192/routing/BC.nc"; //user input
@@ -95,6 +95,14 @@ int main()
                                                     boundary_conditions_varname, 
                                                     boundary_conditions_id_varname); 
     }
+    std::cout << "completed!" << std::endl;
+
+    // Check if reservoir routing is needed
+    // This is a placeholder for future implementation
+    std::cout << "Checking if reservoir routing is needed (placeholder)...";
+    int reservoir_routing_flag = 0; // 0 for no reservoir routing, 1 for reservoir routing
+    // If reservoir routing is needed, set the parameters and read the reservoir data
+    // For now, we will just set a flag and not implement the reservoir routing logic
     std::cout << "completed!" << std::endl;
 
     // OUTPUT OPTIONS------------------------
@@ -215,48 +223,48 @@ int main()
                     }
                 }
 
-                //Get initial condition for this link
-                double q0;
-                if(tc == 0){
-                    q0 = uini(node.stream_id); // initial condition for this link from user
+                // If reservoir routing is not needed, we can proceed with the ODE integration
+                // If reservoir routing is needed, we will skip this part for now
+                // This is a placeholder for future implementation
+                if(reservoir_routing_flag == 0){
+                    //Get initial condition for this link
+                    double q0;
+                    if(tc == 0){
+                        q0 = uini(node.stream_id); // initial condition for this link from user
+                    }else{
+                        q0 = q_final[node.index]; // final step from results which uses node.index
+                    }
+                    
+                    //  Parameters for the ODE
+                    const double A_h = node.params[0]; // hillslope area in m^2
+                    const double lambda_1 = node.params[2];
+                    const double L_i = node.params[1]; // stream link length in m
+                    const double v_0 = node.params[3]; // reference channel velocity in m/s
+                    const double invtau = 60.0 * v_0 / ((1.0 - lambda_1) * L_i);
+
+                    //runoff pointer
+                    const size_t runoff_index = runoff.idToIndex.at(node.stream_id);
+                    const float* runoff_ptr = &runoff.data[runoff_index * runoff.nTime];
+
+                    //solve ODE
+
+                    // Callback function to store results
+                    auto callback = [&](const double& x, const double t) {
+                        size_t idx = static_cast<size_t>(t / simulation_resolution);
+                        if (idx < n_steps)
+                            results[idx * n_links + node.index] = x;
+                    };
+
+                    RHS rhs(runoff_ptr, runoff_resolution, y_p_series, y_p_resolution,A_h,lambda_1,invtau);
+                    auto stepper = make_controlled(1E-9, 1E-6, stepper_type());
+                    integrate_times(stepper, rhs, q0, times.begin(), times.end(), dt, callback);
                 }else{
-                    q0 = q_final[node.index]; // final step from results which uses node.index
+                    // Placeholder for reservoir routing logic
+                    //exit code with failure
+                    std::cerr << "Reservoir routing is not implemented yet. Exiting..." << std::endl;
+                    exit(EXIT_FAILURE);
+
                 }
-                
-                //  Parameters for the ODE
-                const double A_h = node.params[0]; // hillslope area in m^2
-                const double lambda_1 = node.params[2];
-                const double L_i = node.params[1]; // stream link length in m
-                const double v_0 = node.params[3]; // reference channel velocity in m/s
-                const double invtau = 60.0 * v_0 / ((1.0 - lambda_1) * L_i);
-
-                //runoff pointer
-                const size_t runoff_index = runoff.idToIndex.at(node.stream_id);
-                const float* runoff_ptr = &runoff.data[runoff_index * runoff.nTime];
-
-                //solve ODE
-
-                // Callback function to store results
-                auto callback = [&](const double& x, const double t) {
-                    size_t idx = static_cast<size_t>(t / simulation_resolution);
-                    if (idx < n_steps)
-                        results[idx * n_links + node.index] = x;
-                };
-
-                RHS rhs(runoff_ptr, runoff_resolution, y_p_series, y_p_resolution,A_h,lambda_1,invtau);
-                auto stepper = make_controlled(1E-9, 1E-6, stepper_type());
-                integrate_times(stepper, rhs, q0, times.begin(), times.end(), dt, callback);
-
-                // //Solving for res logic
-                // if(has_res == 0){
-                //     RHS rhs(runoff_template, y_p_series,A_h, lambda_1, L_i, v_0, invtau);
-
-                //     auto stepper = make_controlled(1E-9, 1E-6, stepper_type());
-                //     integrate_times(stepper, rhs, q0, times.begin(), times.end(), dt, callback);
-                // }
-                // else{
-                //     res_func()
-                // }
 
             }
         }
