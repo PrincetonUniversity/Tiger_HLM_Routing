@@ -1,48 +1,48 @@
 # ==== Compiler and Flags ====
 CXX := g++
 CXXFLAGS := -O3 -march=native -ffast-math -funroll-loops -fopenmp -DNDEBUG -std=c++17
-# CXXFLAGS := -O0 -g -std=c++17 -fno-omit-frame-pointer -fopenmp
+#CXXFLAGS := -O0 -g -std=c++17 -fno-omit-frame-pointer -fopenmp  # For debugging
 
 # ==== Linker Flags ====
 LDFLAGS := -lboost_system -L${NETCDF_PATH}/lib64 -lnetcdf
 
-# ==== Project Files ====
-SRC := main.cpp \
-       build_info.cpp \
-       omp_info.cpp \
-       model_setup.cpp \
-       routing.cpp \
-       end_info.cpp \
-       I_O/node_info.cpp \
-       I_O/output_series.cpp \
-       I_O/inputs.cpp \
-       I_O/config_loader.cpp \
-       utils/time.cpp
+# ==== Source Files ====
+SRC := src/main.cpp \
+       src/build_info.cpp \
+       src/omp_info.cpp \
+       src/model_setup.cpp \
+       src/routing.cpp \
+       src/end_info.cpp \
+       src/I_O/node_info.cpp \
+       src/I_O/output_series.cpp \
+       src/I_O/inputs.cpp \
+       src/I_O/config_loader.cpp \
+       src/utils/time.cpp
 
-# ==== Directories ====
+# ==== Build and Binary Directories ====
 BUILD_DIR := build
 BIN_DIR := bin
 
 # ==== Object files in build dir ====
-OBJ := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(SRC))
+OBJ := $(patsubst src/%.cpp,$(BUILD_DIR)/%.o,$(SRC))
 
-# ==== Binary in bin dir ====
+# ==== Executable ====
 BIN := $(BIN_DIR)/routing
 
 # ==== Default Target ====
 all: $(BIN)
 
-# ==== Build Binary ====
+# ==== Link executable ====
 $(BIN): $(OBJ)
 	@mkdir -p $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
-# ==== Compile Source Files ====
-$(BUILD_DIR)/%.o: %.cpp
+# ==== Compile source files ====
+$(BUILD_DIR)/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# ==== Clean Target ====
+# ==== Clean ====
 clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR)
 
