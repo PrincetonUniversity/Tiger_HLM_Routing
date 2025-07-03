@@ -9,7 +9,7 @@ solver:
   simulation_resolution: 60 # resolution in minutes
 
 parameters:
-  filename: "../data/node_levels_params.csv"
+  filename: "/home/am2192/Tiger_HLM_Routing/data/node_levels_params.csv"
 
 initial_conditions:
   flag: 0 # 0 for constant, 1 for netcdf
