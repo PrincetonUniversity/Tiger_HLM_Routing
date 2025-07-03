@@ -15,12 +15,11 @@
 
 //Functions for main
 #include "build_info.hpp"
-
+#include "omp_info.hpp"
 
 // C++ standard libraries
 using namespace std;
 using namespace boost::numeric::odeint;
-
 
 // Tasks to be completed:
 // 6. Add checks for:
@@ -33,21 +32,7 @@ using namespace boost::numeric::odeint;
 int main()
 {   
     printBuildInfo(); // Print build information
-
-    // ----------------- SETUP OMP --------------------------------------
-    std::cout << "___________________OpenMP INFO____________________ \n" << std::endl;
-    const char* env_threads = std::getenv("OMP_NUM_THREADS");
-    if (env_threads) {
-        // Environment variable is set — let OpenMP use it
-        std::cout << "OMP_NUM_THREADS is set to " << env_threads << "! \n" << std::endl;
-    } else {
-        // Not set — manually set to 1
-        omp_set_num_threads(1);
-        std::cout << "OMP_NUM_THREADS not set — defaulting to 1 thread." << std::endl;    
-        std::cout << "If you are running this on a SLURM cluster, please set the number of threads using the SLURM_CPUS_PER_TASK variable." << std::endl;
-        std::cout << "For example, you can set it in your SLURM script as follows: export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK" << std::endl;
-    }
-    std::cout << "__________________________________________________ \n" << std::endl;
+    setupOpenMP(); // Set up OpenMP
 
     // ----------------- SETUP --------------------------------------
     std::cout << "_________________MODEL SET UP_____________________ \n" << std::endl;
@@ -55,7 +40,9 @@ int main()
     // INPUTS --------------------------------------
     // Read user inputs from YAML file
     std::cout << "Loading user inputs from YAML file...";
-    ModelConfig config = ConfigLoader::loadConfig("../data/config.yaml");
+    std::string config_file{}; 
+    std::cin >> config_file; // Read config file path from user input
+    ModelConfig config = ConfigLoader::loadConfig(config_file);
     std::cout << "completed!" << std::endl;
 
     // Read node levels from CSV file

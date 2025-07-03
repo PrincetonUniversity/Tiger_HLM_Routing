@@ -9,6 +9,7 @@ LDFLAGS := -lboost_system -L${NETCDF_PATH}/lib64 -lnetcdf
 # ==== Project Files ====
 SRC := main.cpp \
        build_info.cpp \
+       omp_info.cpp \
        I_O/node_info.cpp \
        I_O/output_series.cpp \
        I_O/inputs.cpp \
