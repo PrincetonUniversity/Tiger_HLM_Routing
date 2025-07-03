@@ -13,6 +13,9 @@
 #include "models/RHS.hpp"
 #include "utils/time.hpp"
 
+//Functions for main
+#include "build_info.hpp"
+
 
 // C++ standard libraries
 using namespace std;
@@ -29,12 +32,7 @@ using namespace boost::numeric::odeint;
 
 int main()
 {   
-    // ----------------- HEADER --------------------------------------
-    std::cout << "___________________BUILD INFO_____________________ \n" << std::endl;
-    std::cout << "Tiger HLM routing version 0.1" << std::endl;
-    std::cout << "Tiger HLM routing build date: " << __DATE__ << " " << __TIME__ << std::endl;
-    std::cout << "Tiger HLM routing build by: am2192" << std::endl;
-    std::cout << "__________________________________________________ \n" << std::endl;
+    printBuildInfo(); // Print build information
 
     // ----------------- SETUP OMP --------------------------------------
     std::cout << "___________________OpenMP INFO____________________ \n" << std::endl;
@@ -68,53 +66,34 @@ int main()
     size_t n_links = node_map.size(); //number of links used for allocating results
     std::cout << "completed!" << std::endl;
 
-
     // Initial conditions (optional, can be set to a constant value)
     std::cout << "Loading initial conditions...";
-    // int initial_conditions_flag = 0; // 0 for constant value, 1 for reading from file
-    float initial_value = 1.0; // constant value for q0
-    // If reading from file, set the filename, variable name, and ID variable name
-    std::string initial_conditions_filename = "/scratch/gpfs/GVILLARI/am2192/snapshot.nc"; //user input 
-    std::string initial_conditions_varname = "snapshot"; //user input 
-    std::string initial_conditions_id_varname = "LinkID"; //user input 
     auto uini = loadInitialConditions(config.initial_conditions_flag,
-                                     initial_value, initial_conditions_filename, 
-                                     initial_conditions_varname, 
-                                     initial_conditions_id_varname);
+                                     config.initial_value, 
+                                     config.initial_conditions_filename, 
+                                     config.initial_conditions_varname, 
+                                     config.initial_conditions_id_varname);
     std::cout << "completed!" << std::endl;
 
     //read boundary conditions from file if they exist
     std::cout << "Loading boundary condition...";
-    int boundary_conditions_flag = 0; // 0 for no boundary conditions, 1 for reading from file for whole simulation
-    int boundary_conditions_resolution = 60; // resolution in minutes (user input)
-    std::string boundary_conditions_filename = "/scratch/gpfs/GVILLARI/am2192/routing/BC.nc"; //user input
-    std::string boundary_conditions_varname = "BC"; //user input
-    std::string boundary_conditions_id_varname = "LinkID"; //user input
     BoundaryConditions  boundary_conditions; // to store boundary conditions if they exist
-    if(boundary_conditions_flag == 1){
-        boundary_conditions = readBoundaryConditions(boundary_conditions_filename, 
-                                                    boundary_conditions_varname, 
-                                                    boundary_conditions_id_varname); 
+    if(config.boundary_conditions_flag == 1){
+        boundary_conditions = readBoundaryConditions(config.boundary_conditions_filename, 
+                                                    config.boundary_conditions_varname, 
+                                                    config.boundary_conditions_id_varname); 
     }
     std::cout << "completed!" << std::endl;
 
     // Check if reservoir routing is needed
     // This is a placeholder for future implementation
     std::cout << "Checking if reservoir routing is needed (placeholder)...";
-    int reservoir_routing_flag = 0; // 0 for no reservoir routing, 1 for reservoir routing
-    // If reservoir routing is needed, set the parameters and read the reservoir data
-    // For now, we will just set a flag and not implement the reservoir routing logic
     std::cout << "completed!" << std::endl;
 
     // OUTPUT OPTIONS------------------------
     std::cout << "Setting up output options...";
-    int output_flag = 2; //0 for no output, 1 for subset by level, 2 subset by list (user input)
-    int min_level = 4; // user input for minimum level to keep links (if flag is 2)
-    std::string link_list_filename = "/scratch/gpfs/GVILLARI/am2192/routing/mylinks.csv"; // user input for list of links to keep
     SaveInfo save_info;
-    if(output_flag == 2) save_info = readSaveList(link_list_filename); //read the save list from file
-    std::string series_filepath = "/scratch/gpfs/GVILLARI/am2192/routing/output/series"; // user input
-    std::string snapshot_filepath = "/scratch/gpfs/GVILLARI/am2192/routing/output/snapshot"; // user input
+    if(config.output_flag == 2) save_info = readSaveList(config.link_list_filename); //read the save list from file
     std::cout << "completed!" << std::endl;
     std::cout << "__________________________________________________ \n" << std::endl;
 
@@ -122,37 +101,23 @@ int main()
     std::cout << "_________________STARTING ROUTING_________________ \n" << std::endl;
 
     // TIME CHUNKING STARTS HERE ------------------------------------------
-    int input_flag = 1; // 0 for single file with time chunks, 1 for multiple files without time chunks (user input)
-    int runoff_resolution = 60; // resolution in minutes (user input)
-    size_t chunk_size = 2000; // size of each time chunk in hours (user input)
-    std::string runoff_path = "/scratch/gpfs/GVILLARI/am2192/routing/data/"; ///scratch/gpfs/GVILLARI/am2192/routing/total_runoff_test.nc
-    std::string runoff_varname = "ro"; //user input 
-    std::string runoff_id_varname = "LinkID"; //user input 
 
     // Get runoff chunk info
-    RunoffChunkInfo runoff_info = getRunoffChunkInfo(runoff_path, input_flag, chunk_size);
+    RunoffChunkInfo runoff_info = getRunoffChunkInfo(config.runoff_path, config.input_flag, config.chunk_size);
 
     //define q_final to store final results for each link
     std::vector<float> q_final(n_links); //updated each loop
 
-    // Users parameters for simulation time
-    int simulation_resolution = 60; // resolution in minutes (user input)
-    double dt = 1.0; //user input for solving ODE time step in minutes
-
     // keep tract of total simulation time
     size_t total_time_steps = 0; // total time steps across all chunks
-
-    // Start time
-    std::string start_time = "2010-01-01 00:00:00"; // user input for start time
-    std::string calendar = "julian"; // user input for calendar type (julian or no_leap)
 
     //need to define q_final to store final results for each link
     for(int tc = 0; tc < runoff_info.nchunks; ++tc){ // Loop over time chunks or multiple files
         std::cout << "Processing chunk/file " << tc + 1 << " of " << runoff_info.nchunks << ":" << std::endl;
-        size_t startIndex = tc * chunk_size; // start index for this chunk (need to set default chunk size for when no time chunking)
+        size_t startIndex = tc * config.chunk_size; // start index for this chunk (need to set default chunk size for when no time chunking)
 
         //time string to store the start time for this chunk
-        std::string time_string = addTimeDelta(start_time, calendar, total_time_steps);
+        std::string time_string = addTimeDelta(config.start_date, config.calendar, total_time_steps);
         std::cout << "  Start time for this chunk: " << time_string << std::endl;
 
 
@@ -160,24 +125,24 @@ int main()
 
         // Runoff data
         std::cout << "  Reading in runoff from netcdf file: " << runoff_info.filenames[tc] << "...";
-        RunoffData runoff = readTotalRunoff(input_flag,
+        RunoffData runoff = readTotalRunoff(config.input_flag,
                                             runoff_info.filenames[tc], 
-                                            runoff_varname, 
-                                            runoff_id_varname,
+                                            config.runoff_varname, 
+                                            config.runoff_id_varname,
                                             startIndex,
-                                            chunk_size);
+                                            config.chunk_size);
         std::cout << "completed!" << std::endl;
 
         // -------------------- TIME SERIES SETUP --------------------------------------
         
         // User defined parameters for simulation time (user input)
-        double tf = runoff.nTime * runoff_resolution; // minutes in a file chunk from input file 
+        double tf = runoff.nTime * config.runoff_resolution; // minutes in a file chunk from input file 
         
         //times to store results
-        size_t n_steps = static_cast<size_t>(tf / simulation_resolution);
+        size_t n_steps = static_cast<size_t>(tf / config.simulation_resolution);
         std::vector<int> times(n_steps);
         for(size_t i = 0; i < n_steps; ++i){
-            times[i] = i * simulation_resolution; // time in minutes
+            times[i] = i * config.simulation_resolution; // time in minutes
         }     
 
         // Initialize the results matrix
@@ -201,16 +166,16 @@ int main()
                 // Initialize the inflow series (y_p_series) for this link
                 // This will be used to store inflow from parent nodes or boundary conditions
                 std::vector<double> y_p_series(n_steps, 0.0);
-                size_t y_p_resolution =  simulation_resolution; // resolution in minutes for y_p_series
+                size_t y_p_resolution =  config.simulation_resolution; // resolution in minutes for y_p_series
 
-                bool has_bc = (boundary_conditions_flag == 1) &&
+                bool has_bc = (config.boundary_conditions_flag == 1) &&
                             (boundary_conditions.idToIndex.find(node.stream_id) != boundary_conditions.idToIndex.end());
 
                 if (has_bc) {
                     size_t bc_index = boundary_conditions.idToIndex.at(node.stream_id);
                     size_t nTime = boundary_conditions.nTime;
-                    size_t t_start = total_time_steps/boundary_conditions_resolution; // Convert total_time_steps to hours
-                    y_p_resolution = boundary_conditions_resolution; // resolution in minutes for y_p_series if boundary conditions are used
+                    size_t t_start = total_time_steps/config.boundary_conditions_resolution; // Convert total_time_steps to hours
+                    y_p_resolution = config.boundary_conditions_resolution; // resolution in minutes for y_p_series if boundary conditions are used
                     for (size_t t = t_start; t < n_steps; ++t) {
                         y_p_series[t] = static_cast<double>(
                             boundary_conditions.data[bc_index * nTime + t]
@@ -227,7 +192,7 @@ int main()
                 // If reservoir routing is not needed, we can proceed with the ODE integration
                 // If reservoir routing is needed, we will skip this part for now
                 // This is a placeholder for future implementation
-                if(reservoir_routing_flag == 0){
+                if(config.reservoir_routing_flag == 0){
                     //Get initial condition for this link
                     double q0;
                     if(tc == 0){
@@ -251,14 +216,14 @@ int main()
 
                     // Callback function to store results
                     auto callback = [&](const double& x, const double t) {
-                        size_t idx = static_cast<size_t>(t / simulation_resolution);
+                        size_t idx = static_cast<size_t>(t / config.simulation_resolution);
                         if (idx < n_steps)
                             results[idx * n_links + node.index] = x;
                     };
 
-                    RHS rhs(runoff_ptr, runoff_resolution, y_p_series, y_p_resolution,A_h,lambda_1,invtau);
-                    auto stepper = make_controlled(1E-9, 1E-6, stepper_type());
-                    integrate_times(stepper, rhs, q0, times.begin(), times.end(), dt, callback);
+                    RHS rhs(runoff_ptr, config.runoff_resolution, y_p_series, y_p_resolution,A_h,lambda_1,invtau);
+                    auto stepper = make_controlled(config.atol, config.rtol, stepper_type());
+                    integrate_times(stepper, rhs, q0, times.begin(), times.end(), config.dt, callback);
                 }else{
                     // Placeholder for reservoir routing logic
                     //exit code with failure
@@ -291,7 +256,7 @@ int main()
             stream_ids[i_link] = node_map.at(i_link).stream_id;
         }
         // Snapshot output
-        std::string snapshot_filename = snapshot_filepath + "_" + time_string + ".nc"; // append chunk number to filename
+        std::string snapshot_filename = config.snapshot_filepath + "_" + time_string + ".nc"; // append chunk number to filename
         write_snapshot_netcdf(snapshot_filename, 
                               q_final.data(), 
                               stream_ids.data(),
@@ -300,7 +265,7 @@ int main()
         
         
         //TIME SERIES OUTPUT
-        if (output_flag == 0) {
+        if (config.output_flag == 0) {
             // No output
             std::cout << "No output requested." << std::endl;
             continue; // Skip to next chunk
@@ -311,17 +276,16 @@ int main()
         std::cout << "  Writing time series to netcdf...";
         std::vector<size_t> keep_indices;
         std::vector<int> keep_links;
-        if (output_flag == 1) {
-            std::cout << "Outputting subset by level >= " << min_level << "...";
-            if(min_level < 1) min_level = 1; // Ensure min_level is at least 1
+        if (config.output_flag == 1) {
+            std::cout << "Outputting subset by level >= " << config.min_level << "...";
             for (const auto& [id, node] : node_map) {
-                if (node.level >= min_level) { //user input 
+                if (node.level >= config.min_level) { //user input 
                     keep_indices.push_back(node.index);
                     keep_links.push_back(node.stream_id);
                 }
             }
         }
-        else if (output_flag == 2) {
+        else if (config.output_flag == 2) {
             // Output subset by list (save only above level 0)
             std::cout << "Outputting subset by list...";
             for (const auto& [id, node] : node_map) {
@@ -346,14 +310,14 @@ int main()
         results.resize(n_steps * keep_indices.size()); //Resize results to new size
 
         // Save to netcdf
-        std::string series_filename = series_filepath + "_" + time_string + ".nc"; // append chunk number to filename
+        std::string series_filename = config.series_filepath + "_" + time_string + ".nc"; // append chunk number to filename
         write_timeseries_netcdf(series_filename,
                             results.data(),
                             times.data(),
                             keep_links.data(),
                             n_steps,
                             n_keep_links,
-                            calendar,
+                            config.calendar,
                             time_string);    
 
 
@@ -366,7 +330,6 @@ int main()
     std::cout << "Routing completed successfully!" << std::endl;
     std::cout << "Thank you for using Tiger HLM routing!" << std::endl;
     std::cout << "__________________________________________________ \n" << std::endl;
-
-    
+   
     return 0;
 }

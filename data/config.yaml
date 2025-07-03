@@ -1,11 +1,11 @@
 time:
   start_date: 2010-01-01 00:00:00
-  calendar: "no_leap"
+  calendar: "julian" # "no_leap" or "julian"
 
 solver:
   dt: 1.0
-  rtol: 1E-9
-  atol: 1E-6
+  rtol: 1E-6
+  atol: 1E-9
   simulation_resolution: 60 # resolution in minutes
 
 parameters:
@@ -14,13 +14,13 @@ parameters:
 initial_conditions:
   flag: 0 # 0 for constant, 1 for netcdf
   initial_value: 1.0
-  filename: 'snapshot.nc' #only for flag 1
+  filename: "/scratch/gpfs/GVILLARI/am2192/snapshot.nc" #only for flag 1
   varname: "snapshot" #only for flag 1
   id_varname: "LinkID" #only for flag 1
 
 boundary_conditions:
   flag: 0 #0 no BC. 1 for netcdf of time series to use as parents
-  folder: "/scratch/BC.nc"
+  folder: "/scratch/gpfs/GVILLARI/am2192/routing/BC.nc"
   varname: "BC" #only for flag 1
   id_varname: "LinkID" #only for flag 1
   resolution: 60
@@ -30,16 +30,16 @@ reservoir:
   res_file: '/scratch/myreslist.csv' #list of IDs which have reservoirs
 
 runoff:
-  flag: 0 #0 for single file netcdf; 1 for multiple
-  folder: "/scratch/runoff.nc" # for 0 specify file, for 1 specify path to list of files
-  varname: "runoff" #only for flag 1
+  flag: 1 #0 for single file netcdf; 1 for multiple
+  folder: "/scratch/gpfs/GVILLARI/am2192/routing/data/" # for 0 specify file, for 1 specify path to list of files
+  varname: "ro" #only for flag 1
   id_varname: "LinkID" #only for flag 1
   resolution: 60
-  chunk_size: 100  # not needed for multiple files
+  chunk_size: 2000  # not needed for multiple files
 
 output:
-  flag: 0 # 0 for no output, 1 for subset by level, 2 subset by list
-  level: 1 # only for flag 1
+  flag: 1 # 0 for no output, 1 for subset by level, 2 subset by list
+  level: 4 # only for flag 1
   link_list_filename: "mylinks.csv" # only for flag 2
-  series_filepath: "/scratch/mytimeseries" #creates timeseries_{time}.nc
-  snapshot_filepath: '/scratch/snapshot' #create snapshot_{time}.nc 
+  series_filepath: "/scratch/gpfs/GVILLARI/am2192/routing/output/mytimeseries" #creates timeseries_{time}.nc
+  snapshot_filepath: '/scratch/gpfs/GVILLARI/am2192/routing/output/snapshot' #create snapshot_{time}.nc

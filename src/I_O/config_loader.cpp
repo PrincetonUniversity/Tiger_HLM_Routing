@@ -325,7 +325,12 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
 
     // Load output options
     config.output_flag = parser.getInt("output.flag");
-    config.min_level = parser.getInt("output.level");
+    config.min_level = parser.getInt("output.level");    
+    if(config.min_level < 1){
+        std::cerr << "Warning: Minimum level for output is set to " << config.min_level 
+                  << ". It should be at least 1. Setting it to 1." << std::endl;
+        config.min_level = 1; // Ensure min_level is at least 1
+    }
     config.link_list_filename = parser.getString("output.link_list_filename");
     config.series_filepath = parser.getString("output.series_filepath");
     config.snapshot_filepath = parser.getString("output.snapshot_filepath");
