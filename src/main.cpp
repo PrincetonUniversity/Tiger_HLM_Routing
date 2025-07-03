@@ -16,13 +16,13 @@
 //Functions for main
 #include "build_info.hpp"
 #include "omp_info.hpp"
+#include "model_setup.hpp"
+#include "end_info.hpp"
 
 // C++ standard libraries
-using namespace std;
 using namespace boost::numeric::odeint;
 
-// Tasks to be completed:
-// 6. Add checks for:
+// Add checks for:
 //   - If the initial conditions are valid for the given links.
 //   - If the boundary conditions are valid for the entire simulation time.
 //   - If parameters are valid
@@ -34,105 +34,55 @@ int main(int argc, char* argv[])
     printBuildInfo(); // Print build information
     setupOpenMP(); // Set up OpenMP
 
-    // ----------------- SETUP --------------------------------------
-    std::cout << "_________________MODEL SET UP_____________________ \n" << std::endl;
-
-    // INPUTS --------------------------------------
-    // Read user inputs from YAML file
-    std::cout << "Loading user inputs from YAML file...";
-    ModelConfig config = ConfigLoader::loadConfig(argv[1]);
-    std::cout << "completed!" << std::endl;
-
-    // Read node levels from CSV file
-    std::cout << "Loading network parameters...";
-    std::unordered_map<size_t, NodeInfo> node_map;
-    std::map<size_t, std::vector<size_t>> level_groups;
-    read_node_levels(config.parameters_file, node_map, level_groups);
-    size_t n_links = node_map.size(); //number of links used for allocating results
-    std::cout << "completed!" << std::endl;
-
-    // Initial conditions (optional, can be set to a constant value)
-    std::cout << "Loading initial conditions...";
-    auto uini = loadInitialConditions(config.initial_conditions_flag,
-                                     config.initial_value, 
-                                     config.initial_conditions_filename, 
-                                     config.initial_conditions_varname, 
-                                     config.initial_conditions_id_varname);
-    std::cout << "completed!" << std::endl;
-
-    //read boundary conditions from file if they exist
-    std::cout << "Loading boundary condition...";
-    BoundaryConditions  boundary_conditions; // to store boundary conditions if they exist
-    if(config.boundary_conditions_flag == 1){
-        boundary_conditions = readBoundaryConditions(config.boundary_conditions_filename, 
-                                                    config.boundary_conditions_varname, 
-                                                    config.boundary_conditions_id_varname); 
-    }
-    std::cout << "completed!" << std::endl;
-
-    // Check if reservoir routing is needed
-    // This is a placeholder for future implementation
-    std::cout << "Checking if reservoir routing is needed (placeholder)...";
-    std::cout << "completed!" << std::endl;
-
-    // OUTPUT OPTIONS------------------------
-    std::cout << "Setting up output options...";
-    SaveInfo save_info;
-    if(config.output_flag == 2) save_info = readSaveList(config.link_list_filename); //read the save list from file
-    std::cout << "completed!" << std::endl;
-    std::cout << "__________________________________________________ \n" << std::endl;
+    ModelSetup setup = setupModel(argv[1]); // Set up the model using the provided configuration file
 
     // ----------------- STARTING ROUTING --------------------------------------
     std::cout << "_________________STARTING ROUTING_________________ \n" << std::endl;
 
     // TIME CHUNKING STARTS HERE ------------------------------------------
-
-    // Get runoff chunk info
-    RunoffChunkInfo runoff_info = getRunoffChunkInfo(config.runoff_path, config.input_flag, config.chunk_size);
-
     //define q_final to store final results for each link
-    std::vector<float> q_final(n_links); //updated each loop
+    std::vector<float> q_final(setup.n_links); //updated each loop
 
     // keep tract of total simulation time
     size_t total_time_steps = 0; // total time steps across all chunks
 
     //need to define q_final to store final results for each link
-    for(int tc = 0; tc < runoff_info.nchunks; ++tc){ // Loop over time chunks or multiple files
-        std::cout << "Processing chunk/file " << tc + 1 << " of " << runoff_info.nchunks << ":" << std::endl;
-        size_t startIndex = tc * config.chunk_size; // start index for this chunk (need to set default chunk size for when no time chunking)
+    for(int tc = 0; tc < setup.runoff_info.nchunks; ++tc){ // Loop over time chunks or multiple files
+        std::cout << "Processing chunk/file " << tc + 1 << " of " << setup.runoff_info.nchunks << ":" << std::endl;
+        size_t startIndex = tc * setup.config.chunk_size; // start index for this chunk (need to set default chunk size for when no time chunking)
 
         //time string to store the start time for this chunk
-        std::string time_string = addTimeDelta(config.start_date, config.calendar, total_time_steps);
+        std::string time_string = addTimeDelta(setup.config.start_date, setup.config.calendar, total_time_steps);
         std::cout << "  Start time for this chunk: " << time_string << std::endl;
 
 
         // ----------------- RUNOFF DATA --------------------------------------
 
         // Runoff data
-        std::cout << "  Reading in runoff from netcdf file: " << runoff_info.filenames[tc] << "...";
-        RunoffData runoff = readTotalRunoff(config.input_flag,
-                                            runoff_info.filenames[tc], 
-                                            config.runoff_varname, 
-                                            config.runoff_id_varname,
+        std::cout << "  Reading in runoff from netcdf file: " << setup.runoff_info.filenames[tc] << "...";
+        RunoffData runoff = readTotalRunoff(setup.config.input_flag,
+                                            setup.runoff_info.filenames[tc], 
+                                            setup.config.runoff_varname, 
+                                            setup.config.runoff_id_varname,
                                             startIndex,
-                                            config.chunk_size);
+                                            setup.config.chunk_size);
         std::cout << "completed!" << std::endl;
 
         // -------------------- TIME SERIES SETUP --------------------------------------
         
         // User defined parameters for simulation time (user input)
-        double tf = runoff.nTime * config.runoff_resolution; // minutes in a file chunk from input file 
-        
+       double tf = runoff.nTime * setup.config.runoff_resolution; // minutes in a file chunk from input file
+
         //times to store results
-        size_t n_steps = static_cast<size_t>(tf / config.simulation_resolution);
+        size_t n_steps = static_cast<size_t>(tf / setup.config.simulation_resolution);
         std::vector<int> times(n_steps);
         for(size_t i = 0; i < n_steps; ++i){
-            times[i] = i * config.simulation_resolution; // time in minutes
-        }     
+            times[i] = i * setup.config.simulation_resolution; // time in minutes
+        }
 
         // Initialize the results matrix
         std::cout << "  Allocating space for results...";
-        std::vector<float> results(n_steps * n_links, 0.0);
+        std::vector<float> results(n_steps * setup.n_links, 0.0);
         std::cout << "completed!" << std::endl;
 
         //  -------------- SOLVING ODEs ----------------------------------
@@ -140,36 +90,36 @@ int main(int argc, char* argv[])
         auto start = std::chrono::high_resolution_clock::now();
 
         // Loop through each level and process nodes
-        for (const auto& [level, nodes_at_level] : level_groups) {
+        for (const auto& [level, nodes_at_level] : setup.level_groups) {
             // Solve ODE for each link at this level
             #pragma omp parallel for
             for (size_t i = 0; i < nodes_at_level.size(); ++i) {
                 size_t link_index = nodes_at_level[i];
-                const NodeInfo& node = node_map.at(link_index);  // Safe to access from multiple threads
+                const NodeInfo& node = setup.node_map.at(link_index);  // Safe to access from multiple threads
                 
 
                 // Initialize the inflow series (y_p_series) for this link
                 // This will be used to store inflow from parent nodes or boundary conditions
                 std::vector<double> y_p_series(n_steps, 0.0);
-                size_t y_p_resolution =  config.simulation_resolution; // resolution in minutes for y_p_series
+                size_t y_p_resolution = setup.config.simulation_resolution; // resolution in minutes for y_p_series
 
-                bool has_bc = (config.boundary_conditions_flag == 1) &&
-                            (boundary_conditions.idToIndex.find(node.stream_id) != boundary_conditions.idToIndex.end());
+                bool has_bc = (setup.config.boundary_conditions_flag == 1) &&
+                            (setup.boundary_conditions.idToIndex.find(node.stream_id) != setup.boundary_conditions.idToIndex.end());
 
                 if (has_bc) {
-                    size_t bc_index = boundary_conditions.idToIndex.at(node.stream_id);
-                    size_t nTime = boundary_conditions.nTime;
-                    size_t t_start = total_time_steps/config.boundary_conditions_resolution; // Convert total_time_steps to hours
-                    y_p_resolution = config.boundary_conditions_resolution; // resolution in minutes for y_p_series if boundary conditions are used
+                    size_t bc_index = setup.boundary_conditions.idToIndex.at(node.stream_id);
+                    size_t nTime = setup.boundary_conditions.nTime;
+                    size_t t_start = total_time_steps/setup.config.boundary_conditions_resolution; // Convert total_time_steps to hours
+                    y_p_resolution = setup.config.boundary_conditions_resolution; // resolution in minutes for y_p_series if boundary conditions are used
                     for (size_t t = t_start; t < n_steps; ++t) {
                         y_p_series[t] = static_cast<double>(
-                            boundary_conditions.data[bc_index * nTime + t]
+                            setup.boundary_conditions.data[bc_index * nTime + t]
                         );
                     }
                 } else if (level > 0) {
                     for (size_t parent_index : node.parents) {
                         for (size_t t = 0; t < n_steps; ++t) {
-                            y_p_series[t] += results[t * n_links + parent_index];
+                            y_p_series[t] += results[t * setup.n_links + parent_index];
                         }
                     }
                 }
@@ -177,11 +127,11 @@ int main(int argc, char* argv[])
                 // If reservoir routing is not needed, we can proceed with the ODE integration
                 // If reservoir routing is needed, we will skip this part for now
                 // This is a placeholder for future implementation
-                if(config.reservoir_routing_flag == 0){
+                if(setup.config.reservoir_routing_flag == 0){
                     //Get initial condition for this link
                     double q0;
                     if(tc == 0){
-                        q0 = uini(node.stream_id); // initial condition for this link from user
+                        q0 = setup.uini(node.stream_id); // initial condition for this link from user
                     }else{
                         q0 = q_final[node.index]; // final step from results which uses node.index
                     }
@@ -201,14 +151,14 @@ int main(int argc, char* argv[])
 
                     // Callback function to store results
                     auto callback = [&](const double& x, const double t) {
-                        size_t idx = static_cast<size_t>(t / config.simulation_resolution);
+                        size_t idx = static_cast<size_t>(t / setup.config.simulation_resolution);
                         if (idx < n_steps)
-                            results[idx * n_links + node.index] = x;
+                            results[idx * setup.n_links + node.index] = x;
                     };
 
-                    RHS rhs(runoff_ptr, config.runoff_resolution, y_p_series, y_p_resolution,A_h,lambda_1,invtau);
-                    auto stepper = make_controlled(config.atol, config.rtol, stepper_type());
-                    integrate_times(stepper, rhs, q0, times.begin(), times.end(), config.dt, callback);
+                    RHS rhs(runoff_ptr, setup.config.runoff_resolution, y_p_series, y_p_resolution,A_h,lambda_1,invtau);
+                    auto stepper = make_controlled(setup.config.atol, setup.config.rtol, stepper_type());
+                    integrate_times(stepper, rhs, q0, times.begin(), times.end(), setup.config.dt, callback);
                 }else{
                     // Placeholder for reservoir routing logic
                     //exit code with failure
@@ -234,23 +184,23 @@ int main(int argc, char* argv[])
         // SNAPSHOT OUTPUT
         std::cout << "  Writing final time step (snapshot) to netcdf...";
         // Get final time step for all links for the snapshot
-        std::vector<int> stream_ids(n_links);
+        std::vector<int> stream_ids(setup.n_links);
         size_t last_step = n_steps - 1;
-        for(size_t i_link = 0; i_link < n_links; ++i_link) {
-            q_final[i_link] = results[last_step * n_links + i_link];
-            stream_ids[i_link] = node_map.at(i_link).stream_id;
+        for(size_t i_link = 0; i_link < setup.n_links; ++i_link) {
+            q_final[i_link] = results[last_step * setup.n_links + i_link];
+            stream_ids[i_link] = setup.node_map.at(i_link).stream_id;
         }
         // Snapshot output
-        std::string snapshot_filename = config.snapshot_filepath + "_" + time_string + ".nc"; // append chunk number to filename
+        std::string snapshot_filename = setup.config.snapshot_filepath + "_" + time_string + ".nc"; // append chunk number to filename
         write_snapshot_netcdf(snapshot_filename, 
                               q_final.data(), 
                               stream_ids.data(),
-                              n_links);
+                              setup.n_links);
         std::cout << "  completed!" << std::endl;
         
         
         //TIME SERIES OUTPUT
-        if (config.output_flag == 0) {
+        if (setup.config.output_flag == 0) {
             // No output
             std::cout << "No output requested." << std::endl;
             continue; // Skip to next chunk
@@ -261,20 +211,20 @@ int main(int argc, char* argv[])
         std::cout << "  Writing time series to netcdf...";
         std::vector<size_t> keep_indices;
         std::vector<int> keep_links;
-        if (config.output_flag == 1) {
-            std::cout << "Outputting subset by level >= " << config.min_level << "...";
-            for (const auto& [id, node] : node_map) {
-                if (node.level >= config.min_level) { //user input 
+        if (setup.config.output_flag == 1) {
+            std::cout << "Outputting subset by level >= " << setup.config.min_level << "...";
+            for (const auto& [id, node] : setup.node_map) {
+                if (node.level >= setup.config.min_level) { //user input
                     keep_indices.push_back(node.index);
                     keep_links.push_back(node.stream_id);
                 }
             }
         }
-        else if (config.output_flag == 2) {
+        else if (setup.config.output_flag == 2) {
             // Output subset by list (save only above level 0)
             std::cout << "Outputting subset by list...";
-            for (const auto& [id, node] : node_map) {
-                if (node.level > 0 && save_info.stream_ids.count(node.stream_id)) { 
+            for (const auto& [id, node] : setup.node_map) {
+                if (node.level > 0 && setup.save_info.stream_ids.count(node.stream_id)) {
                     keep_indices.push_back(node.index);
                     keep_links.push_back(node.stream_id);
                 }
@@ -286,8 +236,8 @@ int main(int argc, char* argv[])
         size_t write_pos = 0;
         for (size_t t = 0; t < n_steps; ++t) {
             for (size_t link_index : keep_indices) {
-                if (link_index < n_links) {
-                    size_t read_pos = t * n_links + link_index;
+                if (link_index < setup.n_links) {
+                    size_t read_pos = t * setup.n_links + link_index;
                     results[write_pos++] = results[read_pos];
                 }
             }
@@ -295,14 +245,14 @@ int main(int argc, char* argv[])
         results.resize(n_steps * keep_indices.size()); //Resize results to new size
 
         // Save to netcdf
-        std::string series_filename = config.series_filepath + "_" + time_string + ".nc"; // append chunk number to filename
+        std::string series_filename = setup.config.series_filepath + "_" + time_string + ".nc"; // append chunk number to filename
         write_timeseries_netcdf(series_filename,
                             results.data(),
                             times.data(),
                             keep_links.data(),
                             n_steps,
                             n_keep_links,
-                            config.calendar,
+                            setup.config.calendar,
                             time_string);    
 
 
@@ -310,11 +260,7 @@ int main(int argc, char* argv[])
     }
     std::cout << "__________________________________________________ \n" << std::endl;
 
-    // ----------------- END OF ROUTING --------------------------------------
-    std::cout << "_________________END OF ROUTING__________________ \n" << std::endl;
-    std::cout << "Routing completed successfully!" << std::endl;
-    std::cout << "Thank you for using Tiger HLM routing!" << std::endl;
-    std::cout << "__________________________________________________ \n" << std::endl;
+    printEndInfo(); // Print end information
    
     return 0;
 }
