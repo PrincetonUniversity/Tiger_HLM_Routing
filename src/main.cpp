@@ -29,7 +29,7 @@ using namespace boost::numeric::odeint;
 //   - If the link list is valid and contains links that are present in the node levels file.
 // 7. Move all parts of main to functions to improve readability and maintainability.
 
-int main()
+int main(int argc, char* argv[])
 {   
     printBuildInfo(); // Print build information
     setupOpenMP(); // Set up OpenMP
@@ -40,9 +40,7 @@ int main()
     // INPUTS --------------------------------------
     // Read user inputs from YAML file
     std::cout << "Loading user inputs from YAML file...";
-    std::string config_file{}; 
-    std::cin >> config_file; // Read config file path from user input
-    ModelConfig config = ConfigLoader::loadConfig(config_file);
+    ModelConfig config = ConfigLoader::loadConfig(argv[1]);
     std::cout << "completed!" << std::endl;
 
     // Read node levels from CSV file
