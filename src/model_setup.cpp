@@ -3,10 +3,6 @@
 
 // C++ standard libraries
 #include <iostream>         // For std::cout, std::endl
-#include <unordered_map>   // For std::unordered_map
-#include <map>             // For std::map
-#include <vector>          // For std::vector
-#include <string>          // For std::string
 
 // External libraries
 #include "I_O/node_info.hpp"
@@ -15,7 +11,10 @@
 #include "I_O/config_loader.hpp"
 
 
-
+/**
+ * @brief Sets up the model by loading configuration, node levels, initial conditions,
+ * boundary conditions, runoff data, and output options.    
+ */
 ModelSetup setupModel(const char* config_path) {
     ModelSetup setup;
 
@@ -69,7 +68,6 @@ ModelSetup setupModel(const char* config_path) {
     if(setup.config.output_flag == 2) setup.save_info = readSaveList(setup.config.link_list_filename); //read the save list from file
     std::cout << "completed!" << std::endl;
     std::cout << "__________________________________________________ \n" << std::endl;
-
 
     return setup;
 }

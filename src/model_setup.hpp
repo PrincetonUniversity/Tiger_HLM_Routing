@@ -13,7 +13,11 @@
 #include "I_O/inputs.hpp"
 #include "I_O/config_loader.hpp"
 
-
+/**
+ * @brief Struct to hold the model setup information.
+ * This includes configuration, node information, boundary conditions,
+ * runoff information, and save information.
+ */
 struct ModelSetup {
     ModelConfig config;
     std::unordered_map<size_t, NodeInfo> node_map;

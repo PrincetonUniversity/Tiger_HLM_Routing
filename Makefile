@@ -11,6 +11,7 @@ SRC := main.cpp \
        build_info.cpp \
        omp_info.cpp \
        model_setup.cpp \
+       routing.cpp \
        end_info.cpp \
        I_O/node_info.cpp \
        I_O/output_series.cpp \
@@ -18,21 +19,22 @@ SRC := main.cpp \
        I_O/config_loader.cpp \
        utils/time.cpp
 
-
-# ==== Build directory ====
+# ==== Directories ====
 BUILD_DIR := build
+BIN_DIR := bin
 
 # ==== Object files in build dir ====
 OBJ := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(SRC))
 
-# ==== Binary in build dir ====
-BIN := $(BUILD_DIR)/routing
+# ==== Binary in bin dir ====
+BIN := $(BIN_DIR)/routing
 
 # ==== Default Target ====
 all: $(BIN)
 
 # ==== Build Binary ====
 $(BIN): $(OBJ)
+	@mkdir -p $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
 # ==== Compile Source Files ====
@@ -42,6 +44,6 @@ $(BUILD_DIR)/%.o: %.cpp
 
 # ==== Clean Target ====
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR) $(BIN_DIR)
 
 .PHONY: all clean
