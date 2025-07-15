@@ -14,6 +14,81 @@ using namespace boost::numeric::odeint;
 #include "models/RHS.hpp"
 #include "utils/time.hpp"
 
+void writeOutput(const ModelSetup& setup,
+                 const std::vector<float>& results,
+                 size_t n_steps,
+                 const std::vector<int>& times,
+                 std::vector<float>& q_final,
+                 const std::string& time_string) 
+{
+    // Snapshot output
+    std::cout << "  Writing final time step (snapshot) to netcdf...";
+    std::vector<int> stream_ids(setup.n_links);
+    size_t last_step = n_steps - 1;
+
+    for (size_t i_link = 0; i_link < setup.n_links; ++i_link) {
+        q_final[i_link] = results[last_step * setup.n_links + i_link];
+        stream_ids[i_link] = setup.node_map.at(i_link).stream_id;
+    }
+
+    std::string snapshot_filename = setup.config.snapshot_filepath + "_" + time_string + ".nc";
+    write_snapshot_netcdf(snapshot_filename, q_final.data(), stream_ids.data(), setup.n_links);
+    std::cout << "  completed!" << std::endl;
+
+    // Time series output
+    if (setup.config.output_flag == 0) {
+        std::cout << "No output requested." << std::endl;
+        return;
+    }
+
+    std::cout << "  Writing time series to netcdf...";
+
+    std::vector<size_t> keep_indices;
+    std::vector<int> keep_links;
+
+    if (setup.config.output_flag == 1) {
+        std::cout << "Outputting subset by level >= " << setup.config.min_level << "...";
+        for (const auto& [id, node] : setup.node_map) {
+            if (node.level >= setup.config.min_level) {
+                keep_indices.push_back(node.index);
+                keep_links.push_back(node.stream_id);
+            }
+        }
+    }
+    else if (setup.config.output_flag == 2) {
+        std::cout << "Outputting subset by list...";
+        for (const auto& [id, node] : setup.node_map) {
+            if (node.level > 0 && setup.save_info.stream_ids.count(node.stream_id)) {
+                keep_indices.push_back(node.index);
+                keep_links.push_back(node.stream_id);
+            }
+        }
+    }
+
+    size_t n_keep_links = keep_indices.size();
+    size_t write_pos = 0;
+
+    // Compact results to only the links to keep
+    std::vector<float> compacted_results(n_steps * n_keep_links);
+    for (size_t t = 0; t < n_steps; ++t) {
+        for (size_t link_index : keep_indices) {
+            compacted_results[write_pos++] = results[t * setup.n_links + link_index];
+        }
+    }
+
+    std::string series_filename = setup.config.series_filepath + "_" + time_string + ".nc";
+
+    write_timeseries_netcdf(series_filename,
+                           compacted_results.data(),
+                           times.data(),
+                           keep_links.data(),
+                           n_steps,
+                           n_keep_links,
+                           setup.config.calendar,
+                           time_string);
+
+    std::cout << "completed!" << std::endl;
+}
 
 /**
  * @brief Runs the routing process for the given model setup.
@@ -47,7 +122,7 @@ void runRouting(const ModelSetup& setup){
         // -------------------- TIME SERIES SETUP --------------------------------------
         
         // User defined parameters for simulation time (user input)
-       double tf = runoff.nTime * setup.config.runoff_resolution; // minutes in a file chunk from input file
+        double tf = runoff.nTime * setup.config.runoff_resolution; // minutes in a file chunk from input file
 
         //times to store results
         size_t n_steps = static_cast<size_t>(tf / setup.config.simulation_resolution);
@@ -72,10 +147,8 @@ void runRouting(const ModelSetup& setup){
             for (size_t i = 0; i < nodes_at_level.size(); ++i) {
                 size_t link_index = nodes_at_level[i];
                 const NodeInfo& node = setup.node_map.at(link_index);  // Safe to access from multiple threads
-                
 
-                // Initialize the inflow series (y_p_series) for this link
-                // This will be used to store inflow from parent nodes or boundary conditions
+                // Initialize the inflow series (y_p_series) for this link. This will be used to store inflow from parent nodes or boundary conditions
                 std::vector<double> y_p_series(n_steps, 0.0);
                 size_t y_p_resolution = setup.config.simulation_resolution; // resolution in minutes for y_p_series
 
@@ -101,7 +174,6 @@ void runRouting(const ModelSetup& setup){
                 }
 
                 // If reservoir routing is not needed, we can proceed with the ODE integration
-                // If reservoir routing is needed, we will skip this part for now
                 // This is a placeholder for future implementation
                 if(setup.config.reservoir_routing_flag == 0){
                     //Get initial condition for this link
@@ -124,7 +196,6 @@ void runRouting(const ModelSetup& setup){
                     const float* runoff_ptr = &runoff.data[runoff_index * runoff.nTime];
 
                     //solve ODE
-
                     // Callback function to store results
                     auto callback = [&](const double& x, const double t) {
                         size_t idx = static_cast<size_t>(t / setup.config.simulation_resolution);
@@ -154,85 +225,9 @@ void runRouting(const ModelSetup& setup){
         // Update total time steps for the next chunk
         total_time_steps += tf; //time in minutes for this chunk
 
-
         // -----------OUTPUT --------------------------------------------
-
-        // SNAPSHOT OUTPUT
-        std::cout << "  Writing final time step (snapshot) to netcdf...";
-        // Get final time step for all links for the snapshot
-        std::vector<int> stream_ids(setup.n_links);
-        size_t last_step = n_steps - 1;
-        for(size_t i_link = 0; i_link < setup.n_links; ++i_link) {
-            q_final[i_link] = results[last_step * setup.n_links + i_link];
-            stream_ids[i_link] = setup.node_map.at(i_link).stream_id;
-        }
-        // Snapshot output
-        std::string snapshot_filename = setup.config.snapshot_filepath + "_" + time_string + ".nc"; // append chunk number to filename
-        write_snapshot_netcdf(snapshot_filename, 
-                              q_final.data(), 
-                              stream_ids.data(),
-                              setup.n_links);
-        std::cout << "  completed!" << std::endl;
-        
-        
-        //TIME SERIES OUTPUT
-        if (setup.config.output_flag == 0) {
-            // No output
-            std::cout << "No output requested." << std::endl;
-            continue; // Skip to next chunk
-        }
-
-        // Output time series based on user-defined output flag
-        // If output_flag is 1, 2 we write the time series to netcdf
-        std::cout << "  Writing time series to netcdf...";
-        std::vector<size_t> keep_indices;
-        std::vector<int> keep_links;
-        if (setup.config.output_flag == 1) {
-            std::cout << "Outputting subset by level >= " << setup.config.min_level << "...";
-            for (const auto& [id, node] : setup.node_map) {
-                if (node.level >= setup.config.min_level) { //user input
-                    keep_indices.push_back(node.index);
-                    keep_links.push_back(node.stream_id);
-                }
-            }
-        }
-        else if (setup.config.output_flag == 2) {
-            // Output subset by list (save only above level 0)
-            std::cout << "Outputting subset by list...";
-            for (const auto& [id, node] : setup.node_map) {
-                if (node.level > 0 && setup.save_info.stream_ids.count(node.stream_id)) {
-                    keep_indices.push_back(node.index);
-                    keep_links.push_back(node.stream_id);
-                }
-            }
-        }
-        
-        // Step 2: Compact results in-place
-        size_t n_keep_links = keep_indices.size();
-        size_t write_pos = 0;
-        for (size_t t = 0; t < n_steps; ++t) {
-            for (size_t link_index : keep_indices) {
-                if (link_index < setup.n_links) {
-                    size_t read_pos = t * setup.n_links + link_index;
-                    results[write_pos++] = results[read_pos];
-                }
-            }
-        }
-        results.resize(n_steps * keep_indices.size()); //Resize results to new size
-
-        // Save to netcdf
-        std::string series_filename = setup.config.series_filepath + "_" + time_string + ".nc"; // append chunk number to filename
-        write_timeseries_netcdf(series_filename,
-                            results.data(),
-                            times.data(),
-                            keep_links.data(),
-                            n_steps,
-                            n_keep_links,
-                            setup.config.calendar,
-                            time_string);    
-
-
-        std::cout << "completed!" << std::endl;
+        writeOutput(setup, results, n_steps, times, q_final, time_string);
     }
     std::cout << "__________________________________________________ \n" << std::endl;
 }
+// End of file: Tiger_HLM_Routing/src/routing.cpp
