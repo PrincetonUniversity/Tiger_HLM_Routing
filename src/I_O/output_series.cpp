@@ -1,7 +1,9 @@
 #include "output_series.hpp"
 #include <netcdf.h>
+#include <cstring>
 #include <string>
 #include <iostream>
+#include <fstream>
 #include <vector>
 
 
@@ -16,6 +18,26 @@ do { \
 
 
 /**
+ * @brief Read a save list from a file and return the first stream ID.
+ */
+SaveInfo readSaveList(const std::string& filename) {
+    SaveInfo save_info;
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open: " + filename);
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        if (!line.empty()) {
+            int id = std::stoi(line);
+            save_info.stream_ids.insert(id);
+        }
+    }
+    return save_info;
+}
+
+/**
  * @brief Write a streamflow array to a NetCDF file with optional compression.
  */
 void write_timeseries_netcdf(const std::string& filename,
@@ -24,6 +46,8 @@ void write_timeseries_netcdf(const std::string& filename,
                         const int* linkid_vals,
                         int n_steps,
                         int n_links,
+                        const std::string calendar_str,
+                        const std::string time_string,
                         int compression_level) {
 
     int ncid, sys_dimid, time_dimid;
@@ -52,7 +76,9 @@ void write_timeseries_netcdf(const std::string& filename,
     // Add attributes
     NC_CHECK(nc_put_att_text(ncid, sys_varid, "long_name", 36, "ID associated with each stream link"));
     NC_CHECK(nc_put_att_text(ncid, time_varid, "long_name", 5, "Time"));
-    NC_CHECK(nc_put_att_text(ncid, time_varid, "units", 34, "minutes since start of simulation"));
+    std::string time_units = "minutes since " + time_string;
+    NC_CHECK(nc_put_att_text(ncid, time_varid, "units", strlen(time_units.c_str()), time_units.c_str()));
+    NC_CHECK(nc_put_att_text(ncid, time_varid, "calendar", strlen(calendar_str.c_str()), calendar_str.c_str()));
     NC_CHECK(nc_put_att_text(ncid, results_varid, "long_name", 10, "Discharge"));
     NC_CHECK(nc_put_att_text(ncid, results_varid, "units", 6, "m^3/s"));
 
