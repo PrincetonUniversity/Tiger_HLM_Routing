@@ -33,7 +33,7 @@ To cite this software in your publication, please use the following BibTeX (to b
 Finally, we will have DOIs for each released version on Zenodo. This approach promotes computational reproducibility by allowing you to specify the exact version of the code used to generate the results presented in your publication. A working zenodo badge will be added above once the first version is released. 
 
 ```
-@software{athena,
+@software{,
   author       = {Tiger HLM development team},
   title        = {},
   month        = ,
