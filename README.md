@@ -4,10 +4,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 
-<p>
-<img width="345" height="345" src="./Tiger_HLM_Logo.png">
-</p>
-
 Tiger HLM Routing software for converting hillslope generative runoff to streamflow with nonlinear routing equation. The complementary GPU based runoff generation software can be [here](https://github.com/PrincetonUniversity/Tiger_HLM_GPU). This software can be used as a stand alone as well. 
 
 
