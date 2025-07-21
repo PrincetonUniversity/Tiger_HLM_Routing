@@ -10,6 +10,53 @@ Tiger HLM Routing software for converting hillslope generative runoff to streamf
 Please read [our wiki page](https://github.com/PrincetonUniversity/Tiger_HLM_Routing/wiki) to get started.
 
 
+## Directory Structure
+
+The organizational structure of the Tiger HLM Routing is as follows:
+
+```text
+├── bin                         # Compiled binaries directory
+│   └── routing                 # Final executable for the routing model
+│
+├── build                       # Intermediate build files (object files)
+│
+├── compile.sh                  # Shell script to compile the project manually
+│
+├── data                        # Input data folder
+│   ├── config.yaml             # Model configuration file
+│   └── node_levels_params.csv  # Network structure and routing parameters CSV
+│
+├── Makefile                    # Build automation instructions using `make`
+│
+└── src                         # Source code directory
+    ├── build_info.cpp          # Stores Git/build metadata for inclusion in binary
+    ├── build_info.hpp          # Header for build_info.cpp
+    ├── end_info.cpp            # Handles logging and final reporting
+    ├── end_info.hpp            # Header for end_info.cpp
+    ├── I_O                     # Input/Output module source files
+    │   ├── config_loader.cpp   # Loads YAML config file
+    │   ├── config_loader.hpp
+    │   ├── inputs.cpp          # Reads NetCDF, parameter CSVs, etc.
+    │   ├── inputs.hpp
+    │   ├── node_info.cpp       # Processes node/stream metadata
+    │   ├── node_info.hpp
+    │   ├── output_series.cpp   # Handles time series NetCDF output
+    │   └── output_series.hpp
+    ├── main.cpp                # Entry point for the routing model
+    ├── models
+    │   └── RHS.hpp             # Right-hand side of ODE system for routing equations
+    ├── model_setup.cpp         # Initializes model state, time, and parameters
+    ├── model_setup.hpp
+    ├── omp_info.cpp            # Detects and logs OpenMP thread info
+    ├── omp_info.hpp
+    ├── routing.cpp             # Core routing equation logic
+    ├── routing.hpp
+    └── utils
+        ├── time.cpp            # Time utilities (e.g., timestep parsing, conversions)
+        └── time.hpp
+```
+
+
 ## Citation
 To cite this software in your publication, please use the following BibTeX (to be updated upon paper acceptance) to refer to the code's [method paper](empty):
 ```
