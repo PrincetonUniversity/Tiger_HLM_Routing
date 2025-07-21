@@ -20,7 +20,7 @@ initial_conditions:
 
 boundary_conditions:
   flag: 0 #0 no BC. 1 for netcdf of time series to use as parents
-  folder: "/scratch/gpfs/GVILLARI/am2192/routing/BC.nc"
+  filename: "/scratch/gpfs/GVILLARI/am2192/routing/BC.nc"
   varname: "BC" #only for flag 1
   id_varname: "LinkID" #only for flag 1
   resolution: 60
@@ -35,7 +35,7 @@ runoff:
   varname: "ro" #only for flag 1
   id_varname: "LinkID" #only for flag 1
   resolution: 60
-  chunk_size: 2000  # not needed for multiple files
+  chunk_size:   # not needed for multiple files
 
 output:
   flag: 1 # 0 for no output, 1 for subset by level, 2 subset by list

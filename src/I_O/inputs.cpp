@@ -33,7 +33,7 @@ BoundaryConditions readBoundaryConditions(const std::string& filename,
         ERR(retval);
 
     // Inquire the variable dimensions
-    // Note: The variable is expected to be 2D (time, link)
+    // Note: The variable is expected to be 2D (Link, Time)
     int ndims;
     int dimids[NC_MAX_VAR_DIMS];
     if ((retval = nc_inq_var(ncid, varid, nullptr, nullptr, &ndims, dimids, nullptr)))
@@ -185,7 +185,7 @@ RunoffData readTotalRunoff(const int flag,
         ERR(retval);
 
     // Inquire the variable dimensions
-    // Note: The variable is expected to be 2D (time, link)
+    // Note: The variable is expected to be 2D (link,time)
     int ndims;
     int dimids[NC_MAX_VAR_DIMS];
     if ((retval = nc_inq_var(ncid, varid, nullptr, nullptr, &ndims, dimids, nullptr)))
