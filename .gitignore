@@ -19,3 +19,4 @@ build/I_O/inputs.o
 build/I_O/node_info.o
 build/I_O/output_series.o
 build/utils/time.o
+data/config_internal.yaml

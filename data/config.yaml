@@ -1,5 +1,5 @@
 time:
-  start_date: 2010-01-01 00:00:00
+  start_date: 2017-01-01 00:00:00
   calendar: "julian" # "no_leap" or "julian"
 
 solver:
@@ -9,37 +9,37 @@ solver:
   simulation_resolution: 60 # resolution in minutes
 
 parameters:
-  filename: "/home/am2192/Tiger_HLM_Routing/data/node_levels_params.csv"
+  filename: "./data/params.csv"
 
 initial_conditions:
   flag: 0 # 0 for constant, 1 for netcdf
   initial_value: 1.0
-  filename: "/scratch/gpfs/GVILLARI/am2192/snapshot.nc" #only for flag 1
-  varname: "snapshot" #only for flag 1
-  id_varname: "LinkID" #only for flag 1
+  filename: "" #only for flag 1
+  varname: "" #only for flag 1
+  id_varname: "" #only for flag 1
 
 boundary_conditions:
   flag: 0 #0 no BC. 1 for netcdf of time series to use as parents
-  filename: "/scratch/gpfs/GVILLARI/am2192/routing/BC.nc"
-  varname: "BC" #only for flag 1
-  id_varname: "LinkID" #only for flag 1
-  resolution: 60
+  filename: ""
+  varname: "" #only for flag 1
+  id_varname: "" #only for flag 1
+  resolution: 0
 
 reservoir:
   flag: 0 # 0 = no reservoirs, 1 use reservoirs
-  res_file: '/scratch/myreslist.csv' #list of IDs which have reservoirs
+  res_file: '' #list of IDs which have reservoirs
 
 runoff:
   flag: 1 #0 for single file netcdf; 1 for multiple
-  folder: "/scratch/gpfs/GVILLARI/am2192/routing/data/" # for 0 specify file, for 1 specify path to list of files
+  folder: "./data/runoff/" # for 0 specify file, for 1 specify path to list of files
   varname: "ro" #only for flag 1
   id_varname: "LinkID" #only for flag 1
   resolution: 60
-  chunk_size:   # not needed for multiple files
+  chunk_size: 0  # not needed for multiple files
 
 output:
   flag: 1 # 0 for no output, 1 for subset by level, 2 subset by list
-  level: 4 # only for flag 1
-  link_list_filename: "mylinks.csv" # only for flag 2
-  series_filepath: "/scratch/gpfs/GVILLARI/am2192/routing/output/mytimeseries" #creates timeseries_{time}.nc
-  snapshot_filepath: '/scratch/gpfs/GVILLARI/am2192/routing/output/snapshot' #create snapshot_{time}.nc
+  level: 1 # only for flag 1
+  link_list_filename: "0" # only for flag 2
+  series_filepath: "./data/outputs/mytimeseries" #creates timeseries_{time}.nc
+  snapshot_filepath: './data/outputs/snapshot' #create snapshot_{time}.nc
