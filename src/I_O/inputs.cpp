@@ -80,6 +80,7 @@ BoundaryConditions readBoundaryConditions(const std::string& filename,
 /**
  * @brief Gets information about runoff chunks based on the provided path and flag.
  * @param path The path to the runoff data files or directory.
+ * @param varname The name of the variable to read from the files.
  * @param flag Indicates how to handle the files:
  *             0 - Single file with time chunks.
  *             1 - Multiple files without time chunks.
@@ -88,6 +89,7 @@ BoundaryConditions readBoundaryConditions(const std::string& filename,
  */
 
 RunoffChunkInfo getRunoffChunkInfo(const std::string& path, 
+                                   const std::string& varname,
                                    const int flag,
                                    const int chunk_size){
     RunoffChunkInfo info;
@@ -95,7 +97,7 @@ RunoffChunkInfo getRunoffChunkInfo(const std::string& path,
     // MAYBE BREAK INTO FUNCTION??
     if(flag == 0){
         // Get number of time steps in the file
-        size_t nTimeSteps = GetNCTimeSize(path);
+        size_t nTimeSteps = GetNCTimeSize(path, varname);
         if(nTimeSteps <= chunk_size || chunk_size <= 0){
             // If chunk size is larger than number of time steps or zero, treat as single file
             info.nchunks = 1; // Only one chunk
@@ -138,18 +140,29 @@ RunoffChunkInfo getRunoffChunkInfo(const std::string& path,
  * @param filename The path to the NetCDF file.
  * @return The number of time steps in the file.
  */
-size_t GetNCTimeSize(const std::string& filename){
+size_t GetNCTimeSize(const std::string& filename,
+                     const std::string& varname){
     
-    int ncid, retval;
+    int ncid, varid, retval;
 
     // Open the NetCDF file
     if ((retval = nc_open(filename.c_str(), NC_NOWRITE, &ncid)))
         ERR(retval);
 
-    // Inquire the variable dimensions (Time is expected to be the second dimension but for some reason in this code is reading different than code below!!!!)
+    // Inquire the variable ID
+    if ((retval = nc_inq_varid(ncid, varname.c_str(), &varid)))
+        ERR(retval);
+
+    // Inquire the variable dimensions
+    // Note: The variable is expected to be 2D (link,time)
+    int ndims;
     int dimids[NC_MAX_VAR_DIMS];
+    if ((retval = nc_inq_var(ncid, varid, nullptr, nullptr, &ndims, dimids, nullptr)))
+        ERR(retval);
+    
+    //time only size
     size_t dim_size;
-    if ((retval = nc_inq_dimlen(ncid, dimids[0], &dim_size)))
+    if ((retval = nc_inq_dimlen(ncid, dimids[1], &dim_size)))
         ERR(retval);
     
     // Close the NetCDF file
