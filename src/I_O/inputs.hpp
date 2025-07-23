@@ -48,7 +48,7 @@ RunoffChunkInfo getRunoffChunkInfo(const std::string& path,
  * @return The number of time steps in the file.
  */
 size_t GetNCTimeSize(const std::string& filename,
-                     const std::string& varname = "time"); // Default variable name for time dimension
+                     const std::string& varname); // Default variable name for time dimension
 
 
 
