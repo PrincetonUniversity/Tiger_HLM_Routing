@@ -21,7 +21,7 @@ using namespace boost::numeric::odeint;
 struct RHS {
     const float* runoff_series; // runoff, hourly
     const size_t runoff_resolution; // resolution in minutes for runoff_series
-    const std::vector<double>& y_p_series; // inflow from parent nodes
+    const std::vector<float>& y_p_series; // inflow from parent nodes
     const size_t y_p_resolution; // resolution in minutes for y_p_series
     const double A_h; // hillslope area in m^2
     const double lambda_1; // exponent
@@ -29,7 +29,7 @@ struct RHS {
 
     RHS(const float* runoff_series,
         const size_t runoff_resolution,
-        const std::vector<double>& y_p_series,
+        const std::vector<float>& y_p_series,
         const size_t y_p_resolution,
         const double A_h, 
         const double lambda_1, 

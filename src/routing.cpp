@@ -23,14 +23,14 @@ using namespace boost::numeric::odeint;
  * @param setup The model setup containing configuration and node information.
  * @param results The results vector containing the integrated values for each link.
  * @param n_steps The number of time steps in the simulation.
- * @param times The vector of time points corresponding to the results.
+ * @param sim_times The vector of time points corresponding to the results.
  * @param q_final The vector to store final results for each link.
  * @param time_string A string representing the current time in the simulation.
  */
 void writeOutput(const ModelSetup& setup,
                  const std::vector<float>& results,
                  size_t n_steps,
-                 const std::vector<int>& times,
+                 const std::vector<int>& sim_times,
                  std::vector<float>& q_final,
                  const std::string& time_string) 
 {
@@ -76,9 +76,11 @@ void writeOutput(const ModelSetup& setup,
 
     size_t n_keep_links = keep_indices.size();
     size_t write_pos = 0;
+    // Count how many time steps will be saved
+    size_t n_saved_steps = (n_steps + setup.config.output_resolution - 1) / setup.config.output_resolution;
     // Compact results to only the links to keep
-    std::vector<float> compacted_results(n_steps * n_keep_links);
-    for (size_t t = 0; t < n_steps; ++t) {
+    std::vector<float> compacted_results(n_saved_steps * n_keep_links);
+    for (size_t t = 0; t < n_steps; t += setup.config.output_resolution) {
         for (size_t link_index : keep_indices) {
             compacted_results[write_pos++] = results[t * setup.n_links + link_index];
         }
@@ -87,9 +89,9 @@ void writeOutput(const ModelSetup& setup,
     std::string series_filename = setup.config.series_filepath + "_" + time_string + ".nc";
     write_timeseries_netcdf(series_filename,
                            compacted_results.data(),
-                           times.data(),
+                           sim_times.data(),
                            keep_links.data(),
-                           n_steps,
+                           n_saved_steps,
                            n_keep_links,
                            setup.config.calendar,
                            time_string);
@@ -111,7 +113,7 @@ void writeOutput(const ModelSetup& setup,
  * @param total_time_steps The total number of time steps processed so far.
  * @param tc The current time chunk index.
  * @param q_final The vector to store final results for each link.
- * @param times The vector of time points corresponding to the results.
+ * @param sim_times The vector of time points corresponding to the results.
  */
 void IntegrateLinksAtLevel(const ModelSetup& setup,
                            const RunoffData& runoff,
@@ -122,8 +124,8 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
                            size_t total_time_steps,
                            size_t tc,
                            std::vector<float>& q_final,
-                           const std::vector<int>& times)
-{
+                           const std::vector<int>& sim_times)
+{   
     // Solve ODE for each link at this level
     #pragma omp parallel for
     for (size_t i = 0; i < nodes_at_level.size(); ++i) {
@@ -131,7 +133,7 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
         const NodeInfo& node = setup.node_map.at(link_index);  // Safe to access from multiple threads
 
         // Initialize the inflow series (y_p_series) for this link. This will be used to store inflow from parent nodes or boundary conditions
-        std::vector<double> y_p_series(n_steps, 0.0);
+        std::vector<float> y_p_series(n_steps, 0.0);
         size_t y_p_resolution = 1; // Resolution in minutes for y_p_series, default to 1 minute unless boundary conditions are used
 
         bool has_bc = (setup.config.boundary_conditions_flag == 1) &&
@@ -182,16 +184,18 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
             auto callback = [&](const double& x, const double t) {
                 results[t * setup.n_links + node.index] = x;
             };
-
-            RHS rhs(runoff_ptr, setup.config.runoff_resolution, y_p_series, y_p_resolution,A_h,lambda_1,invtau);
+            RHS rhs(runoff_ptr, setup.config.runoff_resolution, 
+                    y_p_series, y_p_resolution,
+                    A_h,lambda_1,invtau);
             auto stepper = make_controlled(setup.config.atol, 
                                            setup.config.rtol, 
                                            stepper_type());
+
             integrate_const(stepper, 
                             rhs, 
                             q0, 
-                            static_cast<double>(times.front()),
-                            static_cast<double>(times.back()),
+                            static_cast<double>(sim_times.front()),
+                            static_cast<double>(sim_times.back()),
                             setup.config.dt, 
                             callback);
         }else{
@@ -236,13 +240,11 @@ void ProcessChunk(const ModelSetup& setup,
     // -------------------- TIME SERIES SETUP --------------------------------------  
     // User defined parameters for simulation time (user input)
     size_t n_steps = runoff.nTime * setup.config.runoff_resolution; // minutes in a file chunk from input file
-
     //times to store results in minutes for outputs. 
-    // All operations done for each minute
-    // Start and end time used for integration but integration is done for each minute. 
-    std::vector<int> times(n_steps);
-    for(size_t i = 0; i < n_steps; ++i){
-        times[i] = i*setup.config.output_resolution; // time in minutes
+    // All operations done for each minute 
+    std::vector<int> sim_times;
+    for (size_t t = 0; t < n_steps; t += setup.config.output_resolution) {
+        sim_times.push_back(t); // each saved step index (in minutes)
     }
 
     // Initialize the results matrix
@@ -255,7 +257,7 @@ void ProcessChunk(const ModelSetup& setup,
     auto start = std::chrono::high_resolution_clock::now();
     // Loop through each level and process nodes
     for (const auto& [level, nodes_at_level] : setup.level_groups) {
-        IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final, times);
+        IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final, sim_times);
     }
     std::cout << "completed!" << std::endl;
     auto end = std::chrono::high_resolution_clock::now();
@@ -266,7 +268,7 @@ void ProcessChunk(const ModelSetup& setup,
     total_time_steps += n_steps; //time in minutes for this chunk
 
     // -----------OUTPUT --------------------------------------------
-    writeOutput(setup, results, n_steps, times, q_final, time_string);
+    writeOutput(setup, results, n_steps, sim_times, q_final, time_string);
                   
 }
 
