@@ -56,6 +56,7 @@ ModelSetup setupModel(const char* config_path) {
     std::cout << "Checking if reservoir routing is needed (placeholder)...";
     std::cout << "completed!" << std::endl;
 
+
     //Get runoff chunk info
     std::cout << "Loading runoff data chunk info...";
     setup.runoff_info = getRunoffChunkInfo(setup.config.runoff_path,
@@ -69,6 +70,19 @@ ModelSetup setupModel(const char* config_path) {
     if(setup.config.output_flag == 2) setup.save_info = readSaveList(setup.config.link_list_filename); //read the save list from file
     std::cout << "completed!" << std::endl;
     std::cout << "__________________________________________________ \n" << std::endl;
+
+    
+    // Print out memory information ----------------------
+    // Kills system above 1TB
+    size_t input_memory = setup.n_links * setup.config.chunk_size * sizeof(float); // Memory for input runoff data
+    size_t results_memory = setup.n_links * setup.config.chunk_size * setup.config.runoff_resolution * sizeof(float); // Memory for results vector
+    size_t total_memory = (input_memory + results_memory * 1.5) / (1024.0 * 1024.0 * 1024.0); // Assuming 1.5x for intermediate results and overhead
+    if(total_memory > 500.0 and total_memory < 1000.0){
+        std::cout << "Warning: Estimated memory usage is high (" << total_memory << " GB). Consider reducing chunk size." << std::endl;
+    } else if(total_memory >= 1000.0){
+        std::cout << "Error: Estimated memory usage is too high (" << total_memory << " GB). Please reduce chunk size. Exiting....." << std::endl;
+        exit(EXIT_FAILURE);
+    }
 
     return setup;
 }
