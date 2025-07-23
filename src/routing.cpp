@@ -281,7 +281,10 @@ void ProcessChunk(const ModelSetup& setup,
  */
 void runRouting(const ModelSetup& setup){
     std::cout << "_________________STARTING ROUTING_________________ \n" << std::endl;
-    
+
+    // std::vector<int> v;
+    // std::cout << v.max_size();
+
     std::vector<float> q_final(setup.n_links); //define q_final to store final results for each link
     size_t total_time_steps = 0; // keep tract of total simulation time
     for(int tc = 0; tc < setup.runoff_info.nchunks; ++tc){

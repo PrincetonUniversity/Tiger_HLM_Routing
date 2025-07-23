@@ -159,17 +159,22 @@ size_t GetNCTimeSize(const std::string& filename,
     int dimids[NC_MAX_VAR_DIMS];
     if ((retval = nc_inq_var(ncid, varid, nullptr, nullptr, &ndims, dimids, nullptr)))
         ERR(retval);
-    
-    //time only size
-    size_t dim_size;
-    if ((retval = nc_inq_dimlen(ncid, dimids[1], &dim_size)))
-        ERR(retval);
+
+    if (ndims < 2) {
+        std::cerr << "Error: Variable '" << varname << "' is not 2D as expected.\n";
+        exit(EXIT_FAILURE);
+    }
+        
+    size_t dim_sizes[2];
+    for (int i = 0; i < 2; ++i)
+        if ((retval = nc_inq_dimlen(ncid, dimids[i], &dim_sizes[i])))
+            ERR(retval);
     
     // Close the NetCDF file
     if ((retval = nc_close(ncid)))
         ERR(retval);
 
-    return {dim_size};
+    return {dim_sizes[1]};
 }
 
 
