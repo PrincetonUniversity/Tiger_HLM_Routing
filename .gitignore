@@ -20,3 +20,7 @@ build/I_O/node_info.o
 build/I_O/output_series.o
 build/utils/time.o
 data/config_internal.yaml
+data/outputs/mytimeseries2_2017-01-01_00_00_00.nc
+data/outputs/mytimeseries2_2018-01-01_00_00_00.nc
+data/outputs/snapshot2_2017-01-01_00_00_00.nc
+data/outputs/snapshot2_2018-01-01_00_00_00.nc

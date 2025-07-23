@@ -20,7 +20,6 @@ struct ModelConfig {
     double dt;
     double rtol;
     double atol;
-    int simulation_resolution;
        
     // Parameters
     std::string parameters_file;
@@ -54,6 +53,7 @@ struct ModelConfig {
     // Output
     int output_flag;
     int min_level;
+    int output_resolution;
     std::string link_list_filename;
     std::string series_filepath; 
     std::string snapshot_filepath; 

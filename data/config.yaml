@@ -6,7 +6,7 @@ solver:
   dt: 1.0
   rtol: 1E-6
   atol: 1E-9
-  simulation_resolution: 60 # resolution in minutes
+  simulation_resolution: 1 # resolution in minutes
 
 parameters:
   filename: "./data/params.csv"
@@ -41,5 +41,5 @@ output:
   flag: 1 # 0 for no output, 1 for subset by level, 2 subset by list
   level: 1 # only for flag 1
   link_list_filename: "0" # only for flag 2
-  series_filepath: "./data/outputs/mytimeseries" #creates timeseries_{time}.nc
-  snapshot_filepath: './data/outputs/snapshot' #create snapshot_{time}.nc
+  series_filepath: "./data/outputs/mytimeseries2" #creates timeseries_{time}.nc
+  snapshot_filepath: './data/outputs/snapshot2' #create snapshot_{time}.nc

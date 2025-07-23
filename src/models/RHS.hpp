@@ -21,7 +21,7 @@ using namespace boost::numeric::odeint;
 struct RHS {
     const float* runoff_series; // runoff, hourly
     const size_t runoff_resolution; // resolution in minutes for runoff_series
-    const std::vector<double>& y_p_series; // inflow from parent nodes, hourly (for now)
+    const std::vector<double>& y_p_series; // inflow from parent nodes
     const size_t y_p_resolution; // resolution in minutes for y_p_series
     const double A_h; // hillslope area in m^2
     const double lambda_1; // exponent
@@ -52,7 +52,7 @@ struct RHS {
         // runoff_series is hourly
         double runoff = runoff_series[runoff_idx] * (0.001 / 60); // mm/h to m/min
 
-        // y_p is hourly — 60 minutes per step
+        // minutes or users specified boundary condition
         double y_p = y_p_series[y_p_idx];
 
         // Nonlinear routing ODE
