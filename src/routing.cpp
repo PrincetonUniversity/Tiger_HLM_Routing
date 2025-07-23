@@ -76,7 +76,6 @@ void writeOutput(const ModelSetup& setup,
 
     size_t n_keep_links = keep_indices.size();
     size_t write_pos = 0;
-
     // Compact results to only the links to keep
     std::vector<float> compacted_results(n_steps * n_keep_links);
     for (size_t t = 0; t < n_steps; ++t) {
@@ -133,7 +132,7 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
 
         // Initialize the inflow series (y_p_series) for this link. This will be used to store inflow from parent nodes or boundary conditions
         std::vector<double> y_p_series(n_steps, 0.0);
-        size_t y_p_resolution = setup.config.simulation_resolution; // resolution in minutes for y_p_series
+        size_t y_p_resolution = 1; // Resolution in minutes for y_p_series, default to 1 minute unless boundary conditions are used
 
         bool has_bc = (setup.config.boundary_conditions_flag == 1) &&
                     (setup.boundary_conditions.idToIndex.find(node.stream_id) != setup.boundary_conditions.idToIndex.end());
@@ -181,20 +180,25 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
             //solve ODE
             // Callback function to store results
             auto callback = [&](const double& x, const double t) {
-                size_t idx = static_cast<size_t>(t / setup.config.simulation_resolution);
-                if (idx < n_steps)
-                    results[idx * setup.n_links + node.index] = x;
+                results[t * setup.n_links + node.index] = x;
             };
 
             RHS rhs(runoff_ptr, setup.config.runoff_resolution, y_p_series, y_p_resolution,A_h,lambda_1,invtau);
-            auto stepper = make_controlled(setup.config.atol, setup.config.rtol, stepper_type());
-            integrate_times(stepper, rhs, q0, times.begin(), times.end(), setup.config.dt, callback);
+            auto stepper = make_controlled(setup.config.atol, 
+                                           setup.config.rtol, 
+                                           stepper_type());
+            integrate_const(stepper, 
+                            rhs, 
+                            q0, 
+                            static_cast<double>(times.front()),
+                            static_cast<double>(times.back()),
+                            setup.config.dt, 
+                            callback);
         }else{
             // Placeholder for reservoir routing logic
             //exit code with failure
             std::cerr << "Reservoir routing is not implemented yet. Exiting..." << std::endl;
             exit(EXIT_FAILURE);
-
         }
 
     }
@@ -231,13 +235,14 @@ void ProcessChunk(const ModelSetup& setup,
 
     // -------------------- TIME SERIES SETUP --------------------------------------  
     // User defined parameters for simulation time (user input)
-    double tf = runoff.nTime * setup.config.runoff_resolution; // minutes in a file chunk from input file
+    size_t n_steps = runoff.nTime * setup.config.runoff_resolution; // minutes in a file chunk from input file
 
-    //times to store results
-    size_t n_steps = static_cast<size_t>(tf / setup.config.simulation_resolution);
+    //times to store results in minutes for outputs. 
+    // All operations done for each minute
+    // Start and end time used for integration but integration is done for each minute. 
     std::vector<int> times(n_steps);
     for(size_t i = 0; i < n_steps; ++i){
-        times[i] = i * setup.config.simulation_resolution; // time in minutes
+        times[i] = i*setup.config.output_resolution; // time in minutes
     }
 
     // Initialize the results matrix
@@ -258,7 +263,7 @@ void ProcessChunk(const ModelSetup& setup,
     std::cout << "  Total integration time: " << elapsed.count() << " seconds" << std::endl;
 
     // Update total time steps for the next chunk
-    total_time_steps += tf; //time in minutes for this chunk
+    total_time_steps += n_steps; //time in minutes for this chunk
 
     // -----------OUTPUT --------------------------------------------
     writeOutput(setup, results, n_steps, times, q_final, time_string);

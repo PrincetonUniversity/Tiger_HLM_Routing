@@ -49,7 +49,7 @@ struct RHS {
         size_t runoff_idx = static_cast<size_t>(t / runoff_resolution); // assumes t
         size_t y_p_idx = static_cast<size_t>(t / y_p_resolution); // assumes t is in minutes
 
-        // runoff_series is hourly
+        // runoff_series indexed based on minutes resolution
         double runoff = runoff_series[runoff_idx] * (0.001 / 60); // mm/h to m/min
 
         // minutes or users specified boundary condition
