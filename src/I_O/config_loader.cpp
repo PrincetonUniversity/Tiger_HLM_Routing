@@ -315,7 +315,6 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
     config.reservoir_file = parser.getString("reservoir.res_file");
     
     // Load runoff parameters
-    config.input_flag = parser.getInt("runoff.flag");
     config.runoff_resolution = parser.getInt("runoff.resolution");
     config.chunk_size = parser.getInt("runoff.chunk_size");
     config.runoff_path = parser.getString("runoff.folder");

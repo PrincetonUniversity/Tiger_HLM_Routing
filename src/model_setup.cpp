@@ -61,7 +61,6 @@ ModelSetup setupModel(const char* config_path) {
     std::cout << "Loading runoff data chunk info...";
     setup.runoff_info = getRunoffChunkInfo(setup.config.runoff_path,
                                            setup.config.runoff_varname,
-                                           setup.config.input_flag,
                                            setup.config.chunk_size);
     std::cout << "completed!" << std::endl;
 

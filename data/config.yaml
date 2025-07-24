@@ -29,12 +29,11 @@ reservoir:
   res_file: '' #list of IDs which have reservoirs
 
 runoff:
-  flag: 1 #0 for single file netcdf; 1 for multiple
-  folder: "./data/runoff/" # for 0 specify file, for 1 specify path to list of files
-  varname: "ro" #only for flag 1
-  id_varname: "LinkID" #only for flag 1
+  folder: "./data/runoff/" # specify path to list of files
+  varname: "ro" #required if chunk_size > 0
+  id_varname: "LinkID" #required if chunk_size > 0
   resolution: 60
-  chunk_size: 0  # not needed for multiple files
+  chunk_size: 0  #Set to 0 to not chunk files. If > 0, it is the size of each chunk in resoluton. 
 
 output:
   flag: 1 # 0 for no output, 1 for subset by level, 2 subset by list

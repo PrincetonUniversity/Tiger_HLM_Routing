@@ -43,7 +43,6 @@ struct ModelConfig {
     std::string reservoir_file; // file containing reservoir data if reservoir routing is used
 
     // Runoff
-    int input_flag; // 0 for single file with time chunks, 1 for multiple files without time chunks (user input)
     int runoff_resolution; // resolution in minutes (user input)
     size_t chunk_size; // size of each time chunk in hours (user input)
     std::string runoff_path; // path to runoff data files

@@ -34,7 +34,7 @@ void writeOutput(const ModelSetup& setup,
                  std::vector<float>& q_final,
                  const std::string& time_string) 
 {
-    // Snapshot output
+    //------------------------------- SNAPSHOT OUTPUT -----------------------------------------------------------------
     std::cout << "  Writing final time step (snapshot) to netcdf...";
     std::vector<int> stream_ids(setup.n_links);
     size_t last_step = n_steps - 1;
@@ -46,7 +46,7 @@ void writeOutput(const ModelSetup& setup,
     write_snapshot_netcdf(snapshot_filename, q_final.data(), stream_ids.data(), setup.n_links);
     std::cout << "  completed!" << std::endl;
 
-    // Time series output
+    // --------------------------------- Time series output -----------------------------------------------------------
     if (setup.config.output_flag == 0) {
         std::cout << "No output requested." << std::endl;
         return;
@@ -216,26 +216,34 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
  * @param tc The current time chunk index.
  * @param total_time_steps The total number of time steps processed so far.
  * @param q_final The vector to store final results for each link.  
+ * @param startIndex The start index for the current chunk.
  */
 void ProcessChunk(const ModelSetup& setup, 
                   size_t tc, 
                   size_t& total_time_steps, 
-                  std::vector<float>& q_final)
+                  std::vector<float>& q_final,
+                  size_t& startIndex)
 {
-    std::cout << "Processing chunk/file " << tc + 1 << " of " << setup.runoff_info.nchunks << ":" << std::endl;   
-    size_t startIndex = tc * setup.config.chunk_size; // start index for this chunk (need to set default chunk size for when no time chunking)
+    std::cout << "Processing chunk/file " << tc + 1 << " of " << setup.runoff_info.nchunks << ":" << std::endl;
+
+    // Compute the start index for this chunk if files change
+    if (tc > 0 && setup.runoff_info.filenames[tc] != setup.runoff_info.filenames[tc - 1]) startIndex = 0;
+    
+    //Compute starttime for this chunk
     std::string time_string = addTimeDelta(setup.config.start_date, setup.config.calendar, total_time_steps); //time string to store the start time for this chunk
     std::cout << "  Start time for this chunk: " << time_string << std::endl;
 
     // ----------------- RUNOFF DATA --------------------------------------
     std::cout << "  Reading in runoff from netcdf file: " << setup.runoff_info.filenames[tc] << "...";
-    RunoffData runoff = readTotalRunoff(setup.config.input_flag,
-                                        setup.runoff_info.filenames[tc], 
+    RunoffData runoff = readTotalRunoff(setup.runoff_info.filenames[tc], 
                                         setup.config.runoff_varname, 
                                         setup.config.runoff_id_varname,
                                         startIndex,
                                         setup.config.chunk_size);
     std::cout << "completed!" << std::endl;
+
+    //Update start index for the next chunk
+    startIndex += setup.config.chunk_size;
 
     // -------------------- TIME SERIES SETUP --------------------------------------  
     // User defined parameters for simulation time (user input)
@@ -269,7 +277,6 @@ void ProcessChunk(const ModelSetup& setup,
 
     // -----------OUTPUT --------------------------------------------
     writeOutput(setup, results, n_steps, sim_times, q_final, time_string);
-                  
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -285,8 +292,9 @@ void runRouting(const ModelSetup& setup){
     std::cout << "_________________STARTING ROUTING_________________ \n" << std::endl;
     std::vector<float> q_final(setup.n_links); //define q_final to store final results for each link
     size_t total_time_steps = 0; // keep tract of total simulation time
+    size_t startIndex = 0; // start index for the first chunk
     for(int tc = 0; tc < setup.runoff_info.nchunks; ++tc){
-        ProcessChunk(setup, tc, total_time_steps, q_final);
+        ProcessChunk(setup, tc, total_time_steps, q_final, startIndex);
     }
     std::cout << "__________________________________________________ \n" << std::endl;
 }
