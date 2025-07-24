@@ -333,6 +333,8 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
     config.link_list_filename = parser.getString("output.link_list_filename");
     config.series_filepath = parser.getString("output.series_filepath");
     config.snapshot_filepath = parser.getString("output.snapshot_filepath");
+    config.max_output = parser.getInt("output.max_output", 0); // Default to 0 if not specified
+    config.max_output_filepath = parser.getString("output.max_output_filepath");
 
     return config;
 }

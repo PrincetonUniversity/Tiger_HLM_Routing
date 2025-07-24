@@ -46,6 +46,29 @@ void writeOutput(const ModelSetup& setup,
     write_snapshot_netcdf(snapshot_filename, q_final.data(), stream_ids.data(), setup.n_links);
     std::cout << "  completed!" << std::endl;
 
+    // --------------------------------- MAXIMUM OUTPUT -----------------------------------------------------------
+    if( setup.config.max_output == 1) {
+        std::cout << "  Writing maximum values to netcdf...";
+        // Find maximum values for each link
+        std::vector<float> max_results(setup.n_links, 0.0f);
+        // Parallelize over all links
+        #pragma omp parallel for
+        for (size_t i_link = 0; i_link < setup.n_links; ++i_link) {
+            float local_max = 0.0f;
+            for (size_t t = 0; t < n_steps; ++t) {
+                float val = results[t * setup.n_links + i_link];
+                if (val > local_max) {
+                    local_max = val;
+                }
+            }
+            max_results[i_link] = local_max;
+        }
+        std::string max_filename = setup.config.max_output_filepath + "_" + time_string + ".nc";
+        write_snapshot_netcdf(max_filename, max_results.data(), stream_ids.data(), setup.n_links);
+        std::cout << "  completed!" << std::endl;
+    }
+
+
     // --------------------------------- Time series output -----------------------------------------------------------
     if (setup.config.output_flag == 0) {
         std::cout << "No output requested." << std::endl;
@@ -53,6 +76,8 @@ void writeOutput(const ModelSetup& setup,
     }
     std::cout << "  Writing time series to netcdf...";
 
+    // time this part
+    auto start = std::chrono::high_resolution_clock::now();
     std::vector<size_t> keep_indices;
     std::vector<int> keep_links;
     if (setup.config.output_flag == 1) {
@@ -74,15 +99,18 @@ void writeOutput(const ModelSetup& setup,
         }
     }
 
+
+    // Compact results based on keep_indices
     size_t n_keep_links = keep_indices.size();
-    size_t write_pos = 0;
-    // Count how many time steps will be saved
     size_t n_saved_steps = (n_steps + setup.config.output_resolution - 1) / setup.config.output_resolution;
-    // Compact results to only the links to keep
     std::vector<float> compacted_results(n_saved_steps * n_keep_links);
-    for (size_t t = 0; t < n_steps; t += setup.config.output_resolution) {
-        for (size_t link_index : keep_indices) {
-            compacted_results[write_pos++] = results[t * setup.n_links + link_index];
+    // Parallel nested loop with fixed indexing
+    #pragma omp parallel for collapse(2)
+    for (size_t i = 0; i < n_saved_steps; ++i) {
+        for (size_t j = 0; j < n_keep_links; ++j) {
+            size_t t = i * setup.config.output_resolution;
+            size_t link_index = keep_indices[j];
+            compacted_results[i * n_keep_links + j] = results[t * setup.n_links + link_index];
         }
     }
 

@@ -56,6 +56,8 @@ struct ModelConfig {
     std::string link_list_filename;
     std::string series_filepath; 
     std::string snapshot_filepath; 
+    int max_output; // 0 for no max output, 1 for max output
+    std::string max_output_filepath;
 
 };
 

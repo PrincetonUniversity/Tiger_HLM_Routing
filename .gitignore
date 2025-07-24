@@ -29,3 +29,11 @@ data/outputs/mytimeseries3_2018-01-01_00_00_00.nc
 data/outputs/snapshot3_2017-01-01_00_00_00.nc
 data/outputs/snapshot3_2018-01-01_00_00_00.nc
 .vscode/settings.json
+data/outputs/max_output5_2017-01-01_00_00_00.nc
+data/outputs/max_output5_2018-01-01_00_00_00.nc
+data/outputs/mytimeseries5_2017-01-01_00_00_00.nc
+data/outputs/mytimeseries5_2018-01-01_00_00_00.nc
+data/outputs/snapshot4_2017-01-01_00_00_00.nc
+data/outputs/snapshot4_2018-01-01_00_00_00.nc
+data/outputs/snapshot5_2017-01-01_00_00_00.nc
+data/outputs/snapshot5_2018-01-01_00_00_00.nc

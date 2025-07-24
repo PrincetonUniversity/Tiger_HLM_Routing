@@ -40,5 +40,7 @@ output:
   level: 1 # only for flag 1
   resolution: 15 # resolution in minutes (instantaneous output; 15 minute default)
   link_list_filename: "0" # only for flag 2
-  series_filepath: "./data/outputs/mytimeseries4" #creates timeseries_{time}.nc
-  snapshot_filepath: './data/outputs/snapshot4' #create snapshot_{time}.nc
+  series_filepath: "./data/outputs/mytimeseries5" #creates timeseries_{time}.nc
+  snapshot_filepath: './data/outputs/snapshot5' #create snapshot_{time}.nc
+  max_output: 0 # 0 for no max output, 1 for max output
+  max_output_filepath: './data/outputs/max_output5' #create max_output_{time}.nc
