@@ -44,7 +44,7 @@ void writeOutput(const ModelSetup& setup,
     }
     std::string snapshot_filename = setup.config.snapshot_filepath + "_" + time_string + ".nc";
     write_snapshot_netcdf(snapshot_filename, q_final.data(), stream_ids.data(), setup.n_links);
-    std::cout << "  completed!" << std::endl;
+    std::cout << "completed!" << std::endl;
 
     // --------------------------------- MAXIMUM OUTPUT -----------------------------------------------------------
     if( setup.config.max_output == 1) {
@@ -65,7 +65,7 @@ void writeOutput(const ModelSetup& setup,
         }
         std::string max_filename = setup.config.max_output_filepath + "_" + time_string + ".nc";
         write_snapshot_netcdf(max_filename, max_results.data(), stream_ids.data(), setup.n_links);
-        std::cout << "  completed!" << std::endl;
+        std::cout << " completed!" << std::endl;
     }
 
 
