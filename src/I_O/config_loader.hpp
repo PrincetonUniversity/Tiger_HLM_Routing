@@ -20,7 +20,6 @@ struct ModelConfig {
     double dt;
     double rtol;
     double atol;
-    int simulation_resolution;
        
     // Parameters
     std::string parameters_file;
@@ -44,7 +43,6 @@ struct ModelConfig {
     std::string reservoir_file; // file containing reservoir data if reservoir routing is used
 
     // Runoff
-    int input_flag; // 0 for single file with time chunks, 1 for multiple files without time chunks (user input)
     int runoff_resolution; // resolution in minutes (user input)
     size_t chunk_size; // size of each time chunk in hours (user input)
     std::string runoff_path; // path to runoff data files
@@ -54,9 +52,12 @@ struct ModelConfig {
     // Output
     int output_flag;
     int min_level;
+    int output_resolution;
     std::string link_list_filename;
     std::string series_filepath; 
     std::string snapshot_filepath; 
+    int max_output; // 0 for no max output, 1 for max output
+    std::string max_output_filepath;
 
 };
 

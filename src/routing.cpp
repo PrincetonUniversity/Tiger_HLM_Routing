@@ -23,18 +23,18 @@ using namespace boost::numeric::odeint;
  * @param setup The model setup containing configuration and node information.
  * @param results The results vector containing the integrated values for each link.
  * @param n_steps The number of time steps in the simulation.
- * @param times The vector of time points corresponding to the results.
+ * @param sim_times The vector of time points corresponding to the results.
  * @param q_final The vector to store final results for each link.
  * @param time_string A string representing the current time in the simulation.
  */
 void writeOutput(const ModelSetup& setup,
                  const std::vector<float>& results,
                  size_t n_steps,
-                 const std::vector<int>& times,
+                 const std::vector<int>& sim_times,
                  std::vector<float>& q_final,
                  const std::string& time_string) 
 {
-    // Snapshot output
+    //------------------------------- SNAPSHOT OUTPUT -----------------------------------------------------------------
     std::cout << "  Writing final time step (snapshot) to netcdf...";
     std::vector<int> stream_ids(setup.n_links);
     size_t last_step = n_steps - 1;
@@ -44,15 +44,40 @@ void writeOutput(const ModelSetup& setup,
     }
     std::string snapshot_filename = setup.config.snapshot_filepath + "_" + time_string + ".nc";
     write_snapshot_netcdf(snapshot_filename, q_final.data(), stream_ids.data(), setup.n_links);
-    std::cout << "  completed!" << std::endl;
+    std::cout << "completed!" << std::endl;
 
-    // Time series output
+    // --------------------------------- MAXIMUM OUTPUT -----------------------------------------------------------
+    if( setup.config.max_output == 1) {
+        std::cout << "  Writing maximum values to netcdf...";
+        // Find maximum values for each link
+        std::vector<float> max_results(setup.n_links, 0.0f);
+        // Parallelize over all links
+        #pragma omp parallel for
+        for (size_t i_link = 0; i_link < setup.n_links; ++i_link) {
+            float local_max = 0.0f;
+            for (size_t t = 0; t < n_steps; ++t) {
+                float val = results[t * setup.n_links + i_link];
+                if (val > local_max) {
+                    local_max = val;
+                }
+            }
+            max_results[i_link] = local_max;
+        }
+        std::string max_filename = setup.config.max_output_filepath + "_" + time_string + ".nc";
+        write_snapshot_netcdf(max_filename, max_results.data(), stream_ids.data(), setup.n_links);
+        std::cout << " completed!" << std::endl;
+    }
+
+
+    // --------------------------------- Time series output -----------------------------------------------------------
     if (setup.config.output_flag == 0) {
         std::cout << "No output requested." << std::endl;
         return;
     }
     std::cout << "  Writing time series to netcdf...";
 
+    // time this part
+    auto start = std::chrono::high_resolution_clock::now();
     std::vector<size_t> keep_indices;
     std::vector<int> keep_links;
     if (setup.config.output_flag == 1) {
@@ -74,23 +99,27 @@ void writeOutput(const ModelSetup& setup,
         }
     }
 
-    size_t n_keep_links = keep_indices.size();
-    size_t write_pos = 0;
 
-    // Compact results to only the links to keep
-    std::vector<float> compacted_results(n_steps * n_keep_links);
-    for (size_t t = 0; t < n_steps; ++t) {
-        for (size_t link_index : keep_indices) {
-            compacted_results[write_pos++] = results[t * setup.n_links + link_index];
+    // Compact results based on keep_indices
+    size_t n_keep_links = keep_indices.size();
+    size_t n_saved_steps = (n_steps + setup.config.output_resolution - 1) / setup.config.output_resolution;
+    std::vector<float> compacted_results(n_saved_steps * n_keep_links);
+    // Parallel nested loop with fixed indexing
+    #pragma omp parallel for collapse(2)
+    for (size_t i = 0; i < n_saved_steps; ++i) {
+        for (size_t j = 0; j < n_keep_links; ++j) {
+            size_t t = i * setup.config.output_resolution;
+            size_t link_index = keep_indices[j];
+            compacted_results[i * n_keep_links + j] = results[t * setup.n_links + link_index];
         }
     }
 
     std::string series_filename = setup.config.series_filepath + "_" + time_string + ".nc";
     write_timeseries_netcdf(series_filename,
                            compacted_results.data(),
-                           times.data(),
+                           sim_times.data(),
                            keep_links.data(),
-                           n_steps,
+                           n_saved_steps,
                            n_keep_links,
                            setup.config.calendar,
                            time_string);
@@ -112,7 +141,7 @@ void writeOutput(const ModelSetup& setup,
  * @param total_time_steps The total number of time steps processed so far.
  * @param tc The current time chunk index.
  * @param q_final The vector to store final results for each link.
- * @param times The vector of time points corresponding to the results.
+ * @param sim_times The vector of time points corresponding to the results.
  */
 void IntegrateLinksAtLevel(const ModelSetup& setup,
                            const RunoffData& runoff,
@@ -123,8 +152,8 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
                            size_t total_time_steps,
                            size_t tc,
                            std::vector<float>& q_final,
-                           const std::vector<int>& times)
-{
+                           const std::vector<int>& sim_times)
+{   
     // Solve ODE for each link at this level
     #pragma omp parallel for
     for (size_t i = 0; i < nodes_at_level.size(); ++i) {
@@ -132,8 +161,8 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
         const NodeInfo& node = setup.node_map.at(link_index);  // Safe to access from multiple threads
 
         // Initialize the inflow series (y_p_series) for this link. This will be used to store inflow from parent nodes or boundary conditions
-        std::vector<double> y_p_series(n_steps, 0.0);
-        size_t y_p_resolution = setup.config.simulation_resolution; // resolution in minutes for y_p_series
+        std::vector<float> y_p_series(n_steps, 0.0);
+        size_t y_p_resolution = 1; // Resolution in minutes for y_p_series, default to 1 minute unless boundary conditions are used
 
         bool has_bc = (setup.config.boundary_conditions_flag == 1) &&
                     (setup.boundary_conditions.idToIndex.find(node.stream_id) != setup.boundary_conditions.idToIndex.end());
@@ -181,20 +210,27 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
             //solve ODE
             // Callback function to store results
             auto callback = [&](const double& x, const double t) {
-                size_t idx = static_cast<size_t>(t / setup.config.simulation_resolution);
-                if (idx < n_steps)
-                    results[idx * setup.n_links + node.index] = x;
+                results[t * setup.n_links + node.index] = x;
             };
+            RHS rhs(runoff_ptr, setup.config.runoff_resolution, 
+                    y_p_series, y_p_resolution,
+                    A_h,lambda_1,invtau);
+            auto stepper = make_controlled(setup.config.atol, 
+                                           setup.config.rtol, 
+                                           stepper_type());
 
-            RHS rhs(runoff_ptr, setup.config.runoff_resolution, y_p_series, y_p_resolution,A_h,lambda_1,invtau);
-            auto stepper = make_controlled(setup.config.atol, setup.config.rtol, stepper_type());
-            integrate_times(stepper, rhs, q0, times.begin(), times.end(), setup.config.dt, callback);
+            integrate_const(stepper, 
+                            rhs, 
+                            q0, 
+                            static_cast<double>(sim_times.front()),
+                            static_cast<double>(sim_times.back()),
+                            setup.config.dt, 
+                            callback);
         }else{
             // Placeholder for reservoir routing logic
             //exit code with failure
             std::cerr << "Reservoir routing is not implemented yet. Exiting..." << std::endl;
             exit(EXIT_FAILURE);
-
         }
 
     }
@@ -208,36 +244,43 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
  * @param tc The current time chunk index.
  * @param total_time_steps The total number of time steps processed so far.
  * @param q_final The vector to store final results for each link.  
+ * @param startIndex The start index for the current chunk.
  */
 void ProcessChunk(const ModelSetup& setup, 
                   size_t tc, 
                   size_t& total_time_steps, 
-                  std::vector<float>& q_final)
+                  std::vector<float>& q_final,
+                  size_t& startIndex)
 {
-    std::cout << "Processing chunk/file " << tc + 1 << " of " << setup.runoff_info.nchunks << ":" << std::endl;   
-    size_t startIndex = tc * setup.config.chunk_size; // start index for this chunk (need to set default chunk size for when no time chunking)
+    std::cout << "Processing chunk/file " << tc + 1 << " of " << setup.runoff_info.nchunks << ":" << std::endl;
+
+    // Compute the start index for this chunk if files change
+    if (tc > 0 && setup.runoff_info.filenames[tc] != setup.runoff_info.filenames[tc - 1]) startIndex = 0;
+    
+    //Compute starttime for this chunk
     std::string time_string = addTimeDelta(setup.config.start_date, setup.config.calendar, total_time_steps); //time string to store the start time for this chunk
     std::cout << "  Start time for this chunk: " << time_string << std::endl;
 
     // ----------------- RUNOFF DATA --------------------------------------
     std::cout << "  Reading in runoff from netcdf file: " << setup.runoff_info.filenames[tc] << "...";
-    RunoffData runoff = readTotalRunoff(setup.config.input_flag,
-                                        setup.runoff_info.filenames[tc], 
+    RunoffData runoff = readTotalRunoff(setup.runoff_info.filenames[tc], 
                                         setup.config.runoff_varname, 
                                         setup.config.runoff_id_varname,
                                         startIndex,
                                         setup.config.chunk_size);
     std::cout << "completed!" << std::endl;
 
+    //Update start index for the next chunk
+    startIndex += setup.config.chunk_size;
+
     // -------------------- TIME SERIES SETUP --------------------------------------  
     // User defined parameters for simulation time (user input)
-    double tf = runoff.nTime * setup.config.runoff_resolution; // minutes in a file chunk from input file
-
-    //times to store results
-    size_t n_steps = static_cast<size_t>(tf / setup.config.simulation_resolution);
-    std::vector<int> times(n_steps);
-    for(size_t i = 0; i < n_steps; ++i){
-        times[i] = i * setup.config.simulation_resolution; // time in minutes
+    size_t n_steps = runoff.nTime * setup.config.runoff_resolution; // minutes in a file chunk from input file
+    //times to store results in minutes for outputs. 
+    // All operations done for each minute 
+    std::vector<int> sim_times;
+    for (size_t t = 0; t < n_steps; t += setup.config.output_resolution) {
+        sim_times.push_back(t); // each saved step index (in minutes)
     }
 
     // Initialize the results matrix
@@ -250,7 +293,7 @@ void ProcessChunk(const ModelSetup& setup,
     auto start = std::chrono::high_resolution_clock::now();
     // Loop through each level and process nodes
     for (const auto& [level, nodes_at_level] : setup.level_groups) {
-        IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final, times);
+        IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final, sim_times);
     }
     std::cout << "completed!" << std::endl;
     auto end = std::chrono::high_resolution_clock::now();
@@ -258,11 +301,10 @@ void ProcessChunk(const ModelSetup& setup,
     std::cout << "  Total integration time: " << elapsed.count() << " seconds" << std::endl;
 
     // Update total time steps for the next chunk
-    total_time_steps += tf; //time in minutes for this chunk
+    total_time_steps += n_steps; //time in minutes for this chunk
 
     // -----------OUTPUT --------------------------------------------
-    writeOutput(setup, results, n_steps, times, q_final, time_string);
-                  
+    writeOutput(setup, results, n_steps, sim_times, q_final, time_string);
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -276,13 +318,12 @@ void ProcessChunk(const ModelSetup& setup,
  */
 void runRouting(const ModelSetup& setup){
     std::cout << "_________________STARTING ROUTING_________________ \n" << std::endl;
-    
     std::vector<float> q_final(setup.n_links); //define q_final to store final results for each link
     size_t total_time_steps = 0; // keep tract of total simulation time
+    size_t startIndex = 0; // start index for the first chunk
     for(int tc = 0; tc < setup.runoff_info.nchunks; ++tc){
-        ProcessChunk(setup, tc, total_time_steps, q_final);
+        ProcessChunk(setup, tc, total_time_steps, q_final, startIndex);
     }
-
     std::cout << "__________________________________________________ \n" << std::endl;
 }
 // End of file: Tiger_HLM_Routing/src/routing.cpp

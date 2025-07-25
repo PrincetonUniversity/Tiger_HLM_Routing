@@ -292,7 +292,6 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
     config.dt = parser.getDouble("solver.dt");
     config.rtol = parser.getDouble("solver.rtol");
     config.atol = parser.getDouble("solver.atol");
-    config.simulation_resolution = parser.getInt("solver.simulation_resolution");
     
     // Load parameters
     config.parameters_file = parser.getString("parameters.filename");
@@ -316,7 +315,6 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
     config.reservoir_file = parser.getString("reservoir.res_file");
     
     // Load runoff parameters
-    config.input_flag = parser.getInt("runoff.flag");
     config.runoff_resolution = parser.getInt("runoff.resolution");
     config.chunk_size = parser.getInt("runoff.chunk_size");
     config.runoff_path = parser.getString("runoff.folder");
@@ -331,9 +329,12 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
                   << ". It should be at least 1. Setting it to 1." << std::endl;
         config.min_level = 1; // Ensure min_level is at least 1
     }
+    config.output_resolution = parser.getInt("output.resolution");
     config.link_list_filename = parser.getString("output.link_list_filename");
     config.series_filepath = parser.getString("output.series_filepath");
     config.snapshot_filepath = parser.getString("output.snapshot_filepath");
+    config.max_output = parser.getInt("output.max_output", 0); // Default to 0 if not specified
+    config.max_output_filepath = parser.getString("output.max_output_filepath");
 
     return config;
 }

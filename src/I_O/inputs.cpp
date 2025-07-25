@@ -78,56 +78,55 @@ BoundaryConditions readBoundaryConditions(const std::string& filename,
 
 
 /**
- * @brief Gets information about runoff chunks based on the provided path and flag.
+ * @brief Gets information about runoff chunks based on the provided path.
  * @param path The path to the runoff data files or directory.
- * @param flag Indicates how to handle the files:
- *             0 - Single file with time chunks.
- *             1 - Multiple files without time chunks.
- * @param chunk_size Size of each chunk in temporal resolution (optional).
+ * @param varname The name of the variable to read from the files.
+ * @param chunk_size Size of each chunk in temporal resolution. If 0, no chunking is applied.
  * @return A RunoffChunkInfo structure containing the number of chunks and their filenames.
  */
 
 RunoffChunkInfo getRunoffChunkInfo(const std::string& path, 
-                                   const int flag,
+                                   const std::string& varname,
                                    const int chunk_size){
     RunoffChunkInfo info;
     
-    // MAYBE BREAK INTO FUNCTION??
-    if(flag == 0){
-        // Get number of time steps in the file
-        size_t nTimeSteps = GetNCTimeSize(path);
-        if(nTimeSteps <= chunk_size || chunk_size <= 0){
-            // If chunk size is larger than number of time steps or zero, treat as single file
-            info.nchunks = 1; // Only one chunk
-            info.filenames.push_back(path); // Add the single file path
-        }else{
-            //chunk size plus one for the last chunk
-            info.nchunks = nTimeSteps / chunk_size + 1;
-            //copy file name into vector nchunks times so not need to flag in main loop
-            for(int i=0; i < info.nchunks; ++i){
-                info.filenames.push_back(path);
+    // Get files from the specified path
+    std::set<std::filesystem::path> sorted_by_name;
+    for (auto &entry : std::filesystem::directory_iterator(path))
+        sorted_by_name.insert(entry.path());
+    
+    // Ensure the path is valid and contains files
+    if(sorted_by_name.empty()){
+        std::cerr << "Error: No files found in the specified path: " << path << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    // push all filenames into the info struct
+    for (auto &filename : sorted_by_name){
+        // If chunk_size is 0, treat all files as a single chunk
+        if(chunk_size == 0){
+            info.filenames.push_back(filename.c_str()); 
+        } 
+        // Chunk files based on user chunk size
+        else {
+            // Get number of time steps in the file
+            size_t nTimeSteps = GetNCTimeSize(filename, varname);
+            if(nTimeSteps <= chunk_size){
+                // If chunk size is larger than number of time steps or zero, treat as single file
+                info.filenames.push_back(filename.c_str()); // Add the single file path
+            }else{
+                //chunk size plus one for the last chunk
+                size_t nchunks = nTimeSteps / chunk_size + 1;
+                for(int i=0; i < nchunks; ++i){
+                    info.filenames.push_back(filename.c_str());
+                }
             }
         }
-        return info;
+
     }
-    if(flag == 1){
-        // Get multiple files without time chunks
-        std::set<std::filesystem::path> sorted_by_name;
-        for (auto &entry : std::filesystem::directory_iterator(path))
-            sorted_by_name.insert(entry.path());
-        // push all filenames into the info struct
-        for (auto &filename : sorted_by_name){
-            info.filenames.push_back(filename.c_str()); 
-        }
-        //Chunks are number of files
-        info.nchunks = sorted_by_name.size(); // number of files
-        return info;
-    }
-    
-    // If no valid flag is provided, return empty info 
-    info.nchunks = 0;
-    info.filenames.clear();
-    std::cerr << "Warning: No valid flag provided for chunking. Returning empty info." << std::endl;
+
+    //Chunks are number of files
+    info.nchunks = info.filenames.size(); // number of files
 
     // Return empty info
     return info;
@@ -138,25 +137,41 @@ RunoffChunkInfo getRunoffChunkInfo(const std::string& path,
  * @param filename The path to the NetCDF file.
  * @return The number of time steps in the file.
  */
-size_t GetNCTimeSize(const std::string& filename){
+size_t GetNCTimeSize(const std::string& filename,
+                     const std::string& varname){
     
-    int ncid, retval;
+    int ncid, varid, retval;
 
     // Open the NetCDF file
     if ((retval = nc_open(filename.c_str(), NC_NOWRITE, &ncid)))
         ERR(retval);
 
-    // Inquire the variable dimensions (Time is expected to be the second dimension but for some reason in this code is reading different than code below!!!!)
-    int dimids[NC_MAX_VAR_DIMS];
-    size_t dim_size;
-    if ((retval = nc_inq_dimlen(ncid, dimids[0], &dim_size)))
+    // Inquire the variable ID
+    if ((retval = nc_inq_varid(ncid, varname.c_str(), &varid)))
         ERR(retval);
+
+    // Inquire the variable dimensions
+    // Note: The variable is expected to be 2D (link,time)
+    int ndims;
+    int dimids[NC_MAX_VAR_DIMS];
+    if ((retval = nc_inq_var(ncid, varid, nullptr, nullptr, &ndims, dimids, nullptr)))
+        ERR(retval);
+
+    if (ndims < 2) {
+        std::cerr << "Error: Variable '" << varname << "' is not 2D as expected.\n";
+        exit(EXIT_FAILURE);
+    }
+        
+    size_t dim_sizes[2];
+    for (int i = 0; i < 2; ++i)
+        if ((retval = nc_inq_dimlen(ncid, dimids[i], &dim_sizes[i])))
+            ERR(retval);
     
     // Close the NetCDF file
     if ((retval = nc_close(ncid)))
         ERR(retval);
 
-    return {dim_size};
+    return {dim_sizes[1]};
 }
 
 
@@ -168,9 +183,8 @@ size_t GetNCTimeSize(const std::string& filename){
  * @param id_varname The name of the variable containing link IDs.
  * @return A RunoffData structure containing the runoff data, number of links, number of time steps, link IDs, and a mapping from ID to index.
  */
-RunoffData readTotalRunoff(const int flag,
-                           const std::string& filename, 
-                           const std::string& varname, \
+RunoffData readTotalRunoff(const std::string& filename, 
+                           const std::string& varname, 
                            const std::string& id_varname,
                            const size_t startIndex,
                            const size_t chunk_size){
@@ -201,7 +215,13 @@ RunoffData readTotalRunoff(const int flag,
     size_t nTime = dim_sizes[1];
     std::vector<float> data(nLink * nTime);
 
-    if(flag == 0){
+    if(chunk_size == 0)
+    {
+        //Read in entire dataset
+        if ((retval = nc_get_var_float(ncid, varid, data.data())))
+            ERR(retval);
+
+    } else {
         // Read a subset of the data based on start and size
         size_t edge_case = nTime - startIndex;
         nTime = std::min(chunk_size, edge_case); // Ensure size does not exceed available time steps
@@ -215,16 +235,6 @@ RunoffData readTotalRunoff(const int flag,
         if ((retval = nc_get_vara_float(ncid, varid, start, count, data.data())))
             ERR(retval);
     } 
-    else if(flag == 1){
-        //Read in entire dataset
-        if ((retval = nc_get_var_float(ncid, varid, data.data())))
-            ERR(retval);
-
-    } else {
-        std::cout << "Warning: Invalid flag provided for reading runoff data. Exiting....." << std::endl;
-        exit(EXIT_FAILURE);
-    }
-
 
     // Now get the link ID variable: coordinate variable with same name as link dimension
     if ((retval = nc_inq_varid(ncid, id_varname.c_str(), &idVarId)))

@@ -35,11 +35,19 @@ struct RunoffChunkInfo{
     std::vector<std::string> filenames;
 };
 
-RunoffChunkInfo getRunoffChunkInfo(const std::string& path, 
-                            const int flag = 0, // 0 for single file with time chunks, 1 for multiple files without time chunks
-                            const int chunk_size = 0 // Size of each chunk in hours, 0 for no chunking
-                        );
-size_t GetNCTimeSize(const std::string& filename);
+RunoffChunkInfo getRunoffChunkInfo(const std::string& path,
+                                   const std::string& varname, // Name of the variable to read from the files
+                                   const int chunk_size = 0 // Size of each chunk in hours, 0 for no chunking
+                                   );
+
+/**
+ * @brief Gets the number of time steps in a NetCDF file.
+ * @param filename The path to the NetCDF file.
+ * @param varname The name of the variable to read from the file.
+ * @return The number of time steps in the file.
+ */
+size_t GetNCTimeSize(const std::string& filename,
+                     const std::string& varname); // Default variable name for time dimension
 
 
 
@@ -57,9 +65,8 @@ struct RunoffData {
     std::unordered_map<int, size_t> idToIndex;
 };
 
-RunoffData readTotalRunoff(const int flag,
-                           const std::string& filename, 
-                           const std::string& varname, \
+RunoffData readTotalRunoff(const std::string& filename, 
+                           const std::string& varname,
                            const std::string& id_varname,
                            const size_t startIndex,
                            const size_t chunk_size);

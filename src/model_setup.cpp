@@ -56,11 +56,12 @@ ModelSetup setupModel(const char* config_path) {
     std::cout << "Checking if reservoir routing is needed (placeholder)...";
     std::cout << "completed!" << std::endl;
 
+
     //Get runoff chunk info
     std::cout << "Loading runoff data chunk info...";
     setup.runoff_info = getRunoffChunkInfo(setup.config.runoff_path,
-                                                     setup.config.input_flag,
-                                                     setup.config.chunk_size);
+                                           setup.config.runoff_varname,
+                                           setup.config.chunk_size);
     std::cout << "completed!" << std::endl;
 
     // OUTPUT OPTIONS------------------------
@@ -69,5 +70,15 @@ ModelSetup setupModel(const char* config_path) {
     std::cout << "completed!" << std::endl;
     std::cout << "__________________________________________________ \n" << std::endl;
 
+    
+    // Print out memory information ----------------------
+    // Kills system above 1TB
+    size_t input_memory = setup.n_links * setup.config.chunk_size * sizeof(float); // Memory for input runoff data
+    size_t results_memory = setup.n_links * setup.config.chunk_size * setup.config.runoff_resolution * sizeof(float); // Memory for results vector
+    size_t output_memory = 0.5 * (setup.n_links * setup.config.chunk_size * setup.config.runoff_resolution * sizeof(float)) / setup.config.output_resolution; // Memory for output results
+    size_t total_memory = (input_memory + results_memory + output_memory) / (1024.0 * 1024.0 * 1024.0); // Assuming 1.1x for intermediate results and overhead
+    if(total_memory > 500.0){
+        std::cout << "Warning: Estimated memory usage (saving level 1 and above) is high (" << total_memory << " GB). Consider reducing chunk size or ensure saving out levels higher than 1 only. Please monitor your system's memory usage." << std::endl;
+    }
     return setup;
 }
