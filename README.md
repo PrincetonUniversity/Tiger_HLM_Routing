@@ -22,9 +22,17 @@ The organizational structure of the Tiger HLM Routing is as follows:
 │
 ├── compile.sh                  # Shell script to compile the project manually
 │
-├── data                        # Input data folder
+├── data                        # Input data folder (contains example)
+│   ├── hydrography             # Input hydrography files for example
+│   │   ├── hillslopes.gpkg  
+│   │   ├── links.gpkg
+│   │   └── params_table.csv
+│   ├── runoff                  # Input runoff files for example
+│   │   ├── total_runoff_2017.nc  
+│   │   └── total_runoff_2018.nc 
 │   ├── config.yaml             # Model configuration file
-│   └── node_levels_params.csv  # Network structure and routing parameters CSV
+│   ├── example.ipynb           # Notebook containing information for example
+│   └── params.csv  # Network structure and routing parameters CSV
 │
 ├── Makefile                    # Build automation instructions using `make`
 │
