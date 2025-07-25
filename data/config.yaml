@@ -33,7 +33,7 @@ runoff:
   varname: "ro" #required if chunk_size > 0
   id_varname: "LinkID" #required if chunk_size > 0
   resolution: 60
-  chunk_size: 0  #Set to 0 to not chunk files. If > 0, it is the size of each chunk in resoluton. 
+  chunk_size: 2000  #Set to 0 to not chunk files. If > 0, it is the size of each chunk in resoluton. 
 
 output:
   flag: 1 # 0 for no output, 1 for subset by level, 2 subset by list
