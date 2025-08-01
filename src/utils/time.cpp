@@ -19,9 +19,9 @@ std::string addTimeDelta(const std::string& start, const std::string& calendar, 
     std::tm tm = parseTime(start);
 
     if (calendar == "julian") {
-        std::time_t t = std::mktime(&tm);
+        std::time_t t = timegm(&tm);  // use UTC-safe conversion
         t += deltaMinutes * 60;
-        tm = *std::localtime(&t);
+        tm = *std::gmtime(&t);
     } else if (calendar == "no_leap") {
         // Simple no-leap workaround (single-year)
         int minutesPerDay = 1440;
