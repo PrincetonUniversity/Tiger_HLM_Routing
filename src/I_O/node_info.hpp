@@ -5,6 +5,17 @@
 #include <unordered_map>
 #include <map>
 
+/** 
+ * @struct NodeInfo
+ * @brief Structure to hold information about a node in the network.
+ * 
+ * This structure contains:
+ * - index: Unique identifier for the node.
+ * - stream_id: Identifier for the stream associated with the node.
+ * - level: The level of the node in the hierarchy.
+ * - parents: A vector of indices representing parent nodes.
+ * - params: A vector of parameters associated with the node.
+ */
 struct NodeInfo {
     size_t index;
     int stream_id;
