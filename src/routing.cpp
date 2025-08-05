@@ -141,7 +141,6 @@ void writeOutput(const ModelSetup& setup,
  * @param total_time_steps The total number of time steps processed so far.
  * @param tc The current time chunk index.
  * @param q_final The vector to store final results for each link.
- * @param sim_times The vector of time points corresponding to the results.
  */
 void IntegrateLinksAtLevel(const ModelSetup& setup,
                            const RunoffData& runoff,
@@ -151,8 +150,7 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
                            size_t n_steps,
                            size_t total_time_steps,
                            size_t tc,
-                           std::vector<float>& q_final,
-                           const std::vector<int>& sim_times)
+                           std::vector<float>& q_final)
 {   
     // Solve ODE for each link at this level
     #pragma omp parallel for
@@ -194,8 +192,12 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
                 q0 = setup.uini(node.stream_id); // initial condition for this link from user
             }else{
                 q0 = q_final[node.index]; // final step from results which uses node.index
+
+                if (q0 <= 0.0) {
+                    std::cerr << "Warning: Initial discharge for link " << node.index << " is non-positive." << std::endl;
+                    exit(EXIT_FAILURE);
+                }
             }
-            
             //  Parameters for the ODE
             const double A_h = node.params[0]; // hillslope area in m^2
             const double lambda_1 = node.params[2];
@@ -210,7 +212,8 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
             //solve ODE
             // Callback function to store results
             auto callback = [&](const double& x, const double t) {
-                results[t * setup.n_links + node.index] = x;
+                double x_safe = std::max(x, 1e-8); // avoid near zero issues
+                results[t * setup.n_links + node.index] = x_safe;
             };
             RHS rhs(runoff_ptr, setup.config.runoff_resolution, 
                     y_p_series, y_p_resolution,
@@ -222,8 +225,8 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
             integrate_const(stepper, 
                             rhs, 
                             q0, 
-                            static_cast<double>(sim_times.front()),
-                            static_cast<double>(sim_times.back()),
+                            0.0,                          // start time = minute 0
+                            static_cast<double>(n_steps - 1), // end time = minute 59 if n_steps=60
                             setup.config.dt, 
                             callback);
         }else{
@@ -293,7 +296,7 @@ void ProcessChunk(const ModelSetup& setup,
     auto start = std::chrono::high_resolution_clock::now();
     // Loop through each level and process nodes
     for (const auto& [level, nodes_at_level] : setup.level_groups) {
-        IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final, sim_times);
+        IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final);
     }
     std::cout << "completed!" << std::endl;
     auto end = std::chrono::high_resolution_clock::now();

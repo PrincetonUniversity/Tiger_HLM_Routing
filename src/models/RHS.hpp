@@ -56,7 +56,7 @@ struct RHS {
         double y_p = y_p_series[y_p_idx];
 
         // Nonlinear routing ODE
-        double q_safe = std::max(q, 1e-8); // avoid division by zero
+        double q_safe = std::max(q, 1e-8); // avoid near zero issues
         dQdt = invtau * pow(q_safe, lambda_1) * (-q_safe + (runoff * A_h / 60.0) + y_p);
     }
 };
