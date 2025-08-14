@@ -115,8 +115,11 @@ RunoffChunkInfo getRunoffChunkInfo(const std::string& path,
                 // If chunk size is larger than number of time steps or zero, treat as single file
                 info.filenames.push_back(filename.c_str()); // Add the single file path
             }else{
-                //chunk size plus one for the last chunk
-                size_t nchunks = nTimeSteps / chunk_size + 1;
+                //chunk size plus one for the last chunk if required
+                size_t nchunks = nTimeSteps / chunk_size;
+                if (nTimeSteps % chunk_size != 0) {
+                    nchunks += 1;
+                }
                 for(int i=0; i < nchunks; ++i){
                     info.filenames.push_back(filename.c_str());
                 }
