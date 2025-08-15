@@ -174,7 +174,7 @@ size_t GetNCTimeSize(const std::string& filename,
     if ((retval = nc_close(ncid)))
         ERR(retval);
 
-    return {dim_sizes[1]};
+    return dim_sizes[1];
 }
 
 

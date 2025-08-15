@@ -42,7 +42,7 @@ void writeOutput(const ModelSetup& setup,
     std::vector<int> stream_ids(setup.n_links);
     size_t last_step = n_steps - 1;
     for (size_t i_link = 0; i_link < setup.n_links; ++i_link) {
-        q_final[i_link] = results[last_step * setup.n_links + i_link];
+        q_final[i_link] = results[i_link * n_steps + last_step];
         stream_ids[i_link] = setup.node_map.at(i_link).stream_id;
     }
     std::string snapshot_filename = setup.config.snapshot_filepath + "_" + time_string + ".nc";
@@ -59,7 +59,7 @@ void writeOutput(const ModelSetup& setup,
         for (size_t i_link = 0; i_link < setup.n_links; ++i_link) {
             float local_max = 0.0f;
             for (size_t t = 0; t < n_steps; ++t) {
-                float val = results[t * setup.n_links + i_link];
+                float val = results[i_link * n_steps + t];
                 if (val > local_max) {
                     local_max = val;
                 }
@@ -107,7 +107,6 @@ void writeOutput(const ModelSetup& setup,
     size_t n_keep_links = keep_indices.size();
     // Number of steps to skip per output
     size_t output_res_steps = static_cast<size_t>(setup.config.output_resolution / setup.config.dt);
-    std::cout << "Output steps will be every " << output_res_steps << " steps." << std::endl;
     size_t n_saved_steps = (n_steps + output_res_steps - 1) / output_res_steps;
     std::vector<float> compacted_results(n_saved_steps * n_keep_links);
     // Parallel nested loop with fixed indexing
@@ -117,7 +116,7 @@ void writeOutput(const ModelSetup& setup,
         if(t >= n_steps) t = n_steps - 1; // clamp to last step
         for (size_t j = 0; j < n_keep_links; ++j) {
             size_t link_index = keep_indices[j];
-            compacted_results[i * n_keep_links + j] = results[t * setup.n_links + link_index];
+            compacted_results[i * n_keep_links + j] = results[link_index * n_steps + t];
         }
     }
 
@@ -163,8 +162,15 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
                            size_t tc,
                            std::vector<float>& q_final)
 {   
+    // Prefine items for solver
+    auto rk45_dopri_stepper = make_controlled(setup.config.atol, 
+                            setup.config.rtol, 
+                            rk45_type());
+    double start_time = 0.0;                               // in minutes
+    double end_time   = (n_steps-1) * setup.config.dt;         // total time in minutes
+    
     // Solve ODE for each link at this level
-    #pragma omp parallel for schedule(dynamic) // Dynamic scheduling for better load balancing
+    #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < nodes_at_level.size(); ++i) {
         size_t link_index = nodes_at_level[i];
         const NodeInfo& node = setup.node_map.at(link_index);  // Safe to access from multiple threads
@@ -195,7 +201,7 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
             for (size_t parent_index : node.parents) {
                 #pragma omp simd //vectorization
                 for (size_t t = 0; t < n_steps; ++t) {
-                    y_p_series[t] += results[t * setup.n_links + parent_index];
+                    y_p_series[t] += results[parent_index * n_steps + t];
                 }
             }
         }
@@ -233,25 +239,25 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
                 size_t step_idx = static_cast<size_t>(t / setup.config.dt);
                 // Clamp to last valid index
                 if (step_idx >= n_steps) step_idx = n_steps - 1;
-                size_t idx = step_idx * setup.n_links + node.index;
+                size_t idx = node.index * n_steps + step_idx;
                 results[idx] = std::max(x, 1e-8);
             };
             RHS rhs(runoff_ptr, setup.config.runoff_resolution, 
                     y_p_series, y_p_resolution,
                     A_h,lambda_1,invtau);
-            auto stepper = make_controlled(setup.config.atol, 
-                                           setup.config.rtol, 
-                                           stepper_type());
-            //integrator
-            double start_time = 0.0;                               // in minutes
-            double end_time   = (n_steps-1) * setup.config.dt;         // total time in minutes
-            integrate_const(stepper, 
-                            rhs, 
-                            q0, 
-                            start_time, 
-                            end_time,
-                            setup.config.dt,                       // time step in minutes
-                            callback);
+            
+            //integrator based on level
+            if(level <= 1){
+                integrate_const(rk4_stepper, rhs, q0, start_time, end_time, setup.config.dt, callback);
+            }else{
+                integrate_const(rk45_dopri_stepper, 
+                                rhs, 
+                                q0, 
+                                start_time, 
+                                end_time,
+                                setup.config.dt,                       // time step in minutes
+                                callback);
+            }   
         }else{
             // Placeholder for reservoir routing logic
             //exit code with failure
@@ -261,6 +267,7 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
 
     }
 }
+
 /**
  * @brief Processes a single chunk of runoff data.
  * This function reads runoff data from a netCDF file, sets up the time series, initializes the results matrix,
@@ -272,6 +279,7 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
  * @param q_final The vector to store final results for each link.  
  * @param startIndex The start index for the current chunk.
  */
+
 void ProcessChunk(const ModelSetup& setup, 
                   size_t tc, 
                   size_t& total_time_steps, 
@@ -322,7 +330,7 @@ void ProcessChunk(const ModelSetup& setup,
     size_t required_size = n_steps * setup.n_links;
     // Only resize if vector is smaller than needed
     if (results.size() < required_size) {
-        results.resize(n_steps * setup.n_links);
+        results.resize(setup.n_links * n_steps);
     }
     auto alloc_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> alloc_elapsed = alloc_end - alloc_start;
@@ -334,7 +342,11 @@ void ProcessChunk(const ModelSetup& setup,
     auto solve_start = std::chrono::high_resolution_clock::now();
     // Loop through each level and process nodes
     for (const auto& [level, nodes_at_level] : setup.level_groups) {
+        auto level_start = std::chrono::high_resolution_clock::now();
         IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final);
+        auto level_end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> level_elapsed = level_end - level_start;
+        std::cout << "  Total integration time for level " << level << ": " << level_elapsed.count() << " seconds" << std::endl;
     }
     std::cout << "completed!" << std::endl;
     auto solve_end = std::chrono::high_resolution_clock::now();

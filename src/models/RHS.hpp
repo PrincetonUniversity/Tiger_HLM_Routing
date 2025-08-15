@@ -65,4 +65,7 @@ struct RHS {
 typedef runge_kutta_dopri5<
     double, double, double, double,
     vector_space_algebra, default_operations, never_resizer
-> stepper_type;
+> rk45_type;
+
+// RK4 
+runge_kutta4<double> rk4_stepper;

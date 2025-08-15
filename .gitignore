@@ -38,3 +38,9 @@ data/outputs/snapshot4_2018-01-01_00_00_00.nc
 data/outputs/snapshot5_2017-01-01_00_00_00.nc
 data/outputs/snapshot5_2018-01-01_00_00_00.nc
 data/.ipynb_checkpoints/example-checkpoint.ipynb
+data/outputs/max_output7_2017-01-01_00_00_00.nc
+data/outputs/max_output7_2018-01-01_00_00_00.nc
+data/outputs/mytimeseries7_2017-01-01_00_00_00.nc
+data/outputs/mytimeseries7_2018-01-01_00_00_00.nc
+data/outputs/snapshot7_2017-01-01_00_00_00.nc
+data/outputs/snapshot7_2018-01-01_00_00_00.nc
