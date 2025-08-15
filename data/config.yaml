@@ -3,6 +3,7 @@ time:
   calendar: "julian" # "no_leap" or "julian"
 
 solver:
+  rk4_level: 0
   dt: 1.0
   rtol: 1E-4
   atol: 1E-6
@@ -38,7 +39,7 @@ runoff:
 output:
   flag: 1 # 0 for no output, 1 for subset by level, 2 subset by list
   level: 1 # only for flag 1
-  resolution: 1 # resolution in minutes (instantaneous output; 15 minute default)
+  resolution: 15 # resolution in minutes (instantaneous output; 15 minute default)
   link_list_filename: "0" # only for flag 2
   series_filepath: "./data/outputs/mytimeseries" #creates timeseries_{time}.nc
   snapshot_filepath: './data/outputs/snapshot' #create snapshot_{time}.nc

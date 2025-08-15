@@ -1,12 +1,9 @@
 # ==== Compiler and Flags ====
 CXX := icpx
-# CXXFLAGS := -O3 -march=native -ipo -fp-model fast=2 -qopenmp -fma \
-#             -qopt-zmm-usage=high -qopt-report=5 -qopt-report-phase=vec -qopt-report-file=stdout \
-#             -qopt-prefetch -Rpass=loop-vectorize -Rpass=inline -DNDEBUG -std=c++17
-
 CXXFLAGS := -O3 -ipo -fp-model fast=2 -qopenmp -fma \
             -xSapphireRapids -qopt-report-phase=vec -qopt-prefetch \
             -Rpass=loop-vectorize -Rpass=inline -DNDEBUG -std=c++17
+
 
 
 

@@ -289,6 +289,7 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
     config.calendar = parser.getString("time.calendar");
 
     //Load solver/simulation parameters
+    config.rk4_level = parser.getInt("solver.rk4_level");
     config.dt = parser.getDouble("solver.dt");
     config.rtol = parser.getDouble("solver.rtol");
     config.atol = parser.getDouble("solver.atol");

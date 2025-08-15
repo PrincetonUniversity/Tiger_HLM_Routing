@@ -34,9 +34,6 @@ void writeOutput(const ModelSetup& setup,
                  std::vector<float>& q_final,
                  const std::string& time_string) 
 {   
-    // ADD timer to the results
-    auto write_start = std::chrono::high_resolution_clock::now();
-
     //------------------------------- SNAPSHOT OUTPUT -----------------------------------------------------------------
     std::cout << "  Writing final time step (snapshot) to netcdf...";
     std::vector<int> stream_ids(setup.n_links);
@@ -131,10 +128,6 @@ void writeOutput(const ModelSetup& setup,
                            time_string);
 
     std::cout << "completed!" << std::endl;
-
-    auto write_end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> write_elapsed = write_end - write_start;
-    std::cout << "  Total write time: " << write_elapsed.count() << " seconds" << std::endl;
 }
 
 /**
@@ -247,7 +240,7 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
                     A_h,lambda_1,invtau);
             
             //integrator based on level
-            if(level <= 1){
+            if(level <= setup.config.rk4_level){
                 integrate_const(rk4_stepper, rhs, q0, start_time, end_time, setup.config.dt, callback);
             }else{
                 integrate_const(rk45_dopri_stepper, 
@@ -342,11 +335,7 @@ void ProcessChunk(const ModelSetup& setup,
     auto solve_start = std::chrono::high_resolution_clock::now();
     // Loop through each level and process nodes
     for (const auto& [level, nodes_at_level] : setup.level_groups) {
-        auto level_start = std::chrono::high_resolution_clock::now();
         IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final);
-        auto level_end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> level_elapsed = level_end - level_start;
-        std::cout << "  Total integration time for level " << level << ": " << level_elapsed.count() << " seconds" << std::endl;
     }
     std::cout << "completed!" << std::endl;
     auto solve_end = std::chrono::high_resolution_clock::now();
@@ -357,7 +346,12 @@ void ProcessChunk(const ModelSetup& setup,
     total_time_steps += t_final; //time in minutes for this chunk
 
     // -----------OUTPUT --------------------------------------------
+    auto write_start = std::chrono::high_resolution_clock::now();
     writeOutput(setup, results, n_steps, sim_times, q_final, time_string);
+    auto write_end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> write_elapsed = write_end - write_start;
+    std::cout << "  Total write time: " << write_elapsed.count() << " seconds" << std::endl;
+    
 }
 
 //-------------------------------------------------------------------------------------------------
