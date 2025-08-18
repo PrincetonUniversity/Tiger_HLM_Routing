@@ -75,9 +75,7 @@ void writeOutput(const ModelSetup& setup,
         return;
     }
     std::cout << "  Writing time series to netcdf...";
-
-    // time this part
-    auto start = std::chrono::high_resolution_clock::now();
+    
     std::vector<size_t> keep_indices;
     std::vector<int> keep_links;
     if (setup.config.output_flag == 1) {
