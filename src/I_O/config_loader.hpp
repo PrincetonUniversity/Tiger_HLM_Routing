@@ -17,6 +17,7 @@ struct ModelConfig {
     std::string calendar;
 
     // Solver
+    int rk4_level; // Level of RK4 solver, 1 for level 0, 2 for level 1
     double dt;
     double rtol;
     double atol;

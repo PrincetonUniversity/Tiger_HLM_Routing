@@ -3,9 +3,10 @@ time:
   calendar: "julian" # "no_leap" or "julian"
 
 solver:
+  rk4_level: 0
   dt: 1.0
-  rtol: 1E-6
-  atol: 1E-9
+  rtol: 1E-4
+  atol: 1E-6
 
 parameters:
   filename: "./data/params.csv"

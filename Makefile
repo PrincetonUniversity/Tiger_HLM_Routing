@@ -1,7 +1,12 @@
 # ==== Compiler and Flags ====
-CXX := g++
-CXXFLAGS := -O3 -march=native -ffast-math -funroll-loops -fopenmp -DNDEBUG -std=c++17
-#CXXFLAGS := -O0 -g -std=c++17 -fno-omit-frame-pointer -fopenmp  # For debugging
+CXX := icpx
+CXXFLAGS := -O3 -ipo -fp-model fast=2 -qopenmp -fma \
+            -xSapphireRapids -qopt-report-phase=vec -qopt-prefetch \
+            -Rpass=loop-vectorize -Rpass=inline -DNDEBUG -std=c++17
+
+
+
+
 
 # ==== Linker Flags ====
 LDFLAGS := -lboost_system -L${NETCDF_PATH}/lib64 -lnetcdf
@@ -31,6 +36,7 @@ BIN := $(BIN_DIR)/routing
 
 # ==== Default Target ====
 all: $(BIN)
+	@echo "Build successful: $(BIN)"
 
 # ==== Link executable ====
 $(BIN): $(OBJ)
@@ -47,3 +53,5 @@ clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR)
 
 .PHONY: all clean
+
+

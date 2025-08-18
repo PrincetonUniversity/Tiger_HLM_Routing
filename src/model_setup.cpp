@@ -74,11 +74,11 @@ ModelSetup setupModel(const char* config_path) {
     // Print out memory information ----------------------
     // Kills system above 1TB
     size_t input_memory = setup.n_links * setup.config.chunk_size * sizeof(float); // Memory for input runoff data
-    size_t results_memory = setup.n_links * setup.config.chunk_size * setup.config.runoff_resolution * sizeof(float); // Memory for results vector
+    size_t results_memory = setup.n_links * setup.config.chunk_size * setup.config.runoff_resolution * sizeof(float) / setup.config.dt; // Memory for results vector
     size_t output_memory = 0.5 * (setup.n_links * setup.config.chunk_size * setup.config.runoff_resolution * sizeof(float)) / setup.config.output_resolution; // Memory for output results
     size_t total_memory = (input_memory + results_memory + output_memory) / (1024.0 * 1024.0 * 1024.0); // Assuming 1.1x for intermediate results and overhead
     if(total_memory > 500.0){
-        std::cout << "Warning: Estimated memory usage (saving level 1 and above) is high (" << total_memory << " GB). Consider reducing chunk size or ensure saving out levels higher than 1 only. Please monitor your system's memory usage." << std::endl;
+        std::cout << "Warning: Estimated memory usage (saving level 1 and above) is high. Consider reducing chunk size or ensure saving out levels higher than 1 only. Please monitor your system's memory usage." << std::endl;
     }
     return setup;
 }
