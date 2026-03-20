@@ -5,9 +5,6 @@ CXXFLAGS := -O3 -ipo -fp-model fast=2 -qopenmp -fma \
             -Rpass=loop-vectorize -Rpass=inline -DNDEBUG -std=c++17
 
 
-
-
-
 # ==== Linker Flags ====
 LDFLAGS := -lboost_system -L${NETCDF_PATH}/lib64 -lnetcdf
 
