@@ -32,26 +32,40 @@ void writeOutput(const ModelSetup& setup,
                  size_t n_steps,
                  const std::vector<int>& sim_times,
                  std::vector<float>& q_final,
-                 const std::string& time_string) 
+                 const std::string& time_string,
+                 bool is_last_chunk) 
 {   
-    //------------------------------- SNAPSHOT OUTPUT -----------------------------------------------------------------
-    std::cout << "  Writing final time step (snapshot) to netcdf...";
-    std::vector<int> stream_ids(setup.n_links);
+        //------------------------------- SNAPSHOT OUTPUT -----------------------------------------------------------------
+    // q_final MUST be computed every chunk — it's the state handoff to the next chunk.
     size_t last_step = n_steps - 1;
+    #pragma omp parallel for
     for (size_t i_link = 0; i_link < setup.n_links; ++i_link) {
         q_final[i_link] = results[i_link * n_steps + last_step];
+    }
+
+    // stream_ids is shared by both the snapshot and max_output blocks below,
+    // so it's computed once here regardless of which flags are set.
+    std::vector<int> stream_ids(setup.n_links);
+    for (size_t i_link = 0; i_link < setup.n_links; ++i_link) {
         stream_ids[i_link] = setup.node_map.at(i_link).stream_id;
     }
-    std::string snapshot_filename = setup.config.snapshot_filepath + "_" + time_string + ".nc";
-    write_snapshot_netcdf(snapshot_filename, q_final.data(), stream_ids.data(), setup.n_links);
-    std::cout << "completed!" << std::endl;
+
+    //------------------------------- SNAPSHOT OUTPUT -----------------------------------------------------------------
+    if (!setup.config.snapshot_per_year || is_last_chunk) {
+        std::cout << "  Writing final time step (snapshot) to netcdf ("
+                  << (setup.config.snapshot_per_year ? "per-year" : "per-chunk")
+                  << ")...";
+        std::string snapshot_filename = setup.config.snapshot_filepath + "_" + time_string + ".nc";
+        write_snapshot_netcdf(snapshot_filename, q_final.data(), stream_ids.data(), setup.n_links);
+        std::cout << "completed!" << std::endl;
+    }
 
     // --------------------------------- MAXIMUM OUTPUT -----------------------------------------------------------
-    if( setup.config.max_output == 1) {
+    // Deliberately NOT gated by snapshot_per_year — writes every chunk regardless,
+    // since it's a running max, independent of the snapshot checkpoint cadence.
+    if (setup.config.max_output == 1) {
         std::cout << "  Writing maximum values to netcdf...";
-        // Find maximum values for each link
         std::vector<float> max_results(setup.n_links, 0.0f);
-        // Parallelize over all links
         #pragma omp parallel for
         for (size_t i_link = 0; i_link < setup.n_links; ++i_link) {
             float local_max = 0.0f;
@@ -67,7 +81,6 @@ void writeOutput(const ModelSetup& setup,
         write_snapshot_netcdf(max_filename, max_results.data(), stream_ids.data(), setup.n_links);
         std::cout << " completed!" << std::endl;
     }
-
 
     // --------------------------------- Time series output -----------------------------------------------------------
     if (setup.config.output_flag == 0) {
@@ -161,13 +174,17 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
     double end_time   = (n_steps-1) * setup.config.dt;         // total time in minutes
     
     // Solve ODE for each link at this level
-    #pragma omp parallel for schedule(static)
+    #pragma omp parallel for schedule(dynamic)
     for (size_t i = 0; i < nodes_at_level.size(); ++i) {
         size_t link_index = nodes_at_level[i];
         const NodeInfo& node = setup.node_map.at(link_index);  // Safe to access from multiple threads
 
-        // Initialize the inflow series (y_p_series) for this link. This will be used to store inflow from parent nodes or boundary conditions
-        std::vector<float> y_p_series(n_steps, 0.0);
+        // // Initialize the inflow series (y_p_series) for this link. This will be used to store inflow from parent nodes or boundary conditions
+        // std::vector<float> y_p_series(n_steps, 0.0);
+        // Reused per-thread buffer, persists across calls on the same OS
+        // thread, avoiding a fresh heap allocation per node/chunk.
+        thread_local std::vector<float> y_p_series;
+        y_p_series.assign(n_steps, 0.0f);
         size_t y_p_resolution = setup.config.dt; // Resolution in minutes for y_p_series, default to dt unless boundary conditions are used
 
         //Check for BC
@@ -332,10 +349,21 @@ void ProcessChunk(const ModelSetup& setup,
     std::cout << "  Starting integration for each link..."  << std::flush;
     auto solve_start = std::chrono::high_resolution_clock::now();
     // Loop through each level and process nodes
+    // for (const auto& [level, nodes_at_level] : setup.level_groups) {
+    //     IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final);
+    // }
     for (const auto& [level, nodes_at_level] : setup.level_groups) {
+        double level_start = omp_get_wtime();
         IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final);
+        double level_end = omp_get_wtime();
+        std::cout << "    [LEVEL] chunk=" << tc
+                   << " level=" << level
+                   << " nodes=" << nodes_at_level.size()
+                   << " time=" << (level_end - level_start) << "s"
+                   << std::endl;
     }
     std::cout << "completed!" << std::endl;
+
     auto solve_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> solve_elapsed = solve_end - solve_start ;
     std::cout << "  Total integration time: " << solve_elapsed.count() << " seconds" << std::endl;
@@ -344,8 +372,9 @@ void ProcessChunk(const ModelSetup& setup,
     total_time_steps += t_final; //time in minutes for this chunk
 
     // -----------OUTPUT --------------------------------------------
+    bool is_last_chunk = (tc + 1 == static_cast<size_t>(setup.runoff_info.nchunks));
     auto write_start = std::chrono::high_resolution_clock::now();
-    writeOutput(setup, results, n_steps, sim_times, q_final, time_string);
+    writeOutput(setup, results, n_steps, sim_times, q_final, time_string, is_last_chunk);
     auto write_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> write_elapsed = write_end - write_start;
     std::cout << "  Total write time: " << write_elapsed.count() << " seconds" << std::endl;
