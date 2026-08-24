@@ -2,6 +2,7 @@
 
 [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.16696727.svg)](https://doi.org/10.5281/zenodo.16696727)
 
 
 Tiger-HLM Routing software for converting hillslope generative runoff to streamflow with nonlinear routing equation. The complementary GPU based runoff generation software can be [here](https://github.com/PrincetonUniversity/Tiger_HLM_GPU). This software can be used as a stand alone as well. 
@@ -83,17 +84,26 @@ To cite this software in your publication, please use the following BibTeX (to b
 }
 ```
 
-Finally, we will have DOIs for each released version on Zenodo. This approach promotes computational reproducibility by allowing you to specify the exact version of the code used to generate the results presented in your publication. A working zenodo badge will be added above once the first version is released. 
+Finally, we have DOIs for each released version on Zenodo. This approach promotes computational reproducibility by allowing you to specify the exact version of the code used to generate the results presented in your publication. Please use the following citation for citing the software. 
 
 ```
-@software{,
-  author       = {Tiger HLM development team},
-  title        = {},
-  month        = ,
-  year         = ,
-  publisher    = {},
-  version      = {},
-  doi          = {},
-  url          = {}
+@software{binjolkar_2026_16696727,
+  author       = {Binjolkar, Manjaree and
+                  Michalek, Alexander and
+                  Amorim, Renato and
+                  Li, Donghui and
+                  Maebius, Sarah and
+                  Pu, Tianjiao and
+                  Ethier, Stephane and
+                  Villarini, Gabriele},
+  title        = {Tiger-HLM: A GPU-Accelerated Distributed
+                   Hydrologic Model
+                  },
+  month        = aug,
+  year         = 2026,
+  publisher    = {Zenodo},
+  version      = {v1.0.0},
+  doi          = {10.5281/zenodo.16696727},
+  url          = {https://doi.org/10.5281/zenodo.16696727},
 }
 ```

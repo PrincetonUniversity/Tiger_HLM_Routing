@@ -38,6 +38,22 @@ SaveInfo readSaveList(const std::string& filename) {
 }
 
 /**
+ * @brief Make the time string in the netcdf file cf compliant.
+ * Convert YYYY-MM-DD_HH_MM_SS -> YYYY-MM-DD HH:MM:SS (CF-compliant)
+ */
+static std::string make_cf_time_string(const std::string& t) {
+    // Accepts "YYYY-MM-DD_HH_MM_SS" and returns "YYYY-MM-DD HH:MM:SS"
+    if (t.size() != 19) {
+        throw std::runtime_error("Invalid time string format: " + t);
+    }
+    std::string out = t;
+    out[10] = ' ';
+    out[13] = ':';
+    out[16] = ':';
+    return out;
+}
+
+/**
  * @brief Write a streamflow array to a NetCDF file with optional compression.
  */
 void write_timeseries_netcdf(const std::string& filename,
@@ -76,8 +92,9 @@ void write_timeseries_netcdf(const std::string& filename,
     // Add attributes
     NC_CHECK(nc_put_att_text(ncid, sys_varid, "long_name", 36, "ID associated with each stream link"));
     NC_CHECK(nc_put_att_text(ncid, time_varid, "long_name", 5, "Time"));
-    std::string time_units = "minutes since " + time_string;
-    NC_CHECK(nc_put_att_text(ncid, time_varid, "units", strlen(time_units.c_str()), time_units.c_str()));
+    std::string cf_time = make_cf_time_string(time_string);
+    std::string time_units = "minutes since " + cf_time;
+    NC_CHECK(nc_put_att_text(ncid, time_varid, "units", time_units.size(), time_units.c_str()));
     NC_CHECK(nc_put_att_text(ncid, time_varid, "calendar", strlen(calendar_str.c_str()), calendar_str.c_str()));
     NC_CHECK(nc_put_att_text(ncid, results_varid, "long_name", 10, "Discharge"));
     NC_CHECK(nc_put_att_text(ncid, results_varid, "units", 6, "m^3/s"));
