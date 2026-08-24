@@ -275,6 +275,19 @@ double SimpleYamlParser::getDouble(const std::string& key, double defaultValue) 
     return defaultValue;
 }
 
+bool SimpleYamlParser::getBool(const std::string& key, bool defaultValue) {
+    auto it = keyValueMap.find(key);
+    if (it == keyValueMap.end()) {
+        return defaultValue;
+    }
+    std::string val = it->second;
+    std::transform(val.begin(), val.end(), val.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    if (val == "true" || val == "1" || val == "yes") return true;
+    if (val == "false" || val == "0" || val == "no") return false;
+    return defaultValue; // unrecognized value, fall back rather than guess
+}
+
 
 // Implementation of ConfigLoader methods
 ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
@@ -336,6 +349,7 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
     config.snapshot_filepath = parser.getString("output.snapshot_filepath");
     config.max_output = parser.getInt("output.max_output", 0); // Default to 0 if not specified
     config.max_output_filepath = parser.getString("output.max_output_filepath");
+    config.snapshot_per_year = parser.getBool("output.snapshot_per_year", false); // Default false: preserves old per-chunk behavior for existing YAMLs
 
     return config;
 }
