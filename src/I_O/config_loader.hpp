@@ -59,6 +59,7 @@ struct ModelConfig {
     std::string snapshot_filepath; 
     int max_output; // 0 for no max output, 1 for max output
     std::string max_output_filepath;
+    bool snapshot_per_year = false; // if true, write only one snapshot at end of year instead of every chunk
 
 };
 
@@ -77,6 +78,7 @@ public:
     std::string getString(const std::string& key, const std::string& defaultValue = "");
     int getInt(const std::string& key, int defaultValue = 0);
     double getDouble(const std::string& key, double defaultValue = 0.0);
+    bool getBool(const std::string& key, bool defaultValue = false);
 
 private:
     // Member variables
