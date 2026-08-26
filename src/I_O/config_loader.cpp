@@ -350,6 +350,7 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
     config.max_output = parser.getInt("output.max_output", 0); // Default to 0 if not specified
     config.max_output_filepath = parser.getString("output.max_output_filepath");
     config.snapshot_per_year = parser.getBool("output.snapshot_per_year", false); // Default false: preserves old per-chunk behavior for existing YAMLs
+        config.use_task_scheduling = parser.getBool("solver.use_task_scheduling", false); // Default false: preserves per-level parallel_for behavior
 
     return config;
 }

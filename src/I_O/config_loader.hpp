@@ -60,7 +60,8 @@ struct ModelConfig {
     int max_output; // 0 for no max output, 1 for max output
     std::string max_output_filepath;
     bool snapshot_per_year = false; // if true, write only one snapshot at end of year instead of every chunk
-
+        bool use_task_scheduling = false; // if true, use OpenMP task depend() dataflow scheduling instead of per-level parallel_for
+        
 };
 
 /**
