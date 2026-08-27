@@ -130,15 +130,142 @@ void writeOutput(const ModelSetup& setup,
 }
 
 /**
- * @brief Integrates the ODEs for each link at a given level.
- * This function uses OpenMP to parallelize the integration process for each link.
- * It initializes the inflow series for each link, checks for boundary conditions, and integrates the ODEs.
- * 
+ * @brief Solves the ODE for a single link and writes its slice of the results matrix.
+ * Every traversal calls SolveLink.
+ * Every parent of this link must already have
+ * written its slice of @p results before this is entered.
+ *
+ * Parent inflow is accumulated in routing-table order (node.parents).
+ *
  * @param setup The model setup containing configuration and node information.
  * @param runoff The runoff data for the current time chunk.
- * @param results The results vector to store the integrated values for each link.          
+ * @param results The results vector to store the integrated values for each link.
+ * @param node The link to solve.
+ * @param n_steps The number of time steps in the simulation.
+ * @param total_time_steps The total number of time steps processed so far.
+ * @param tc The current time chunk index.
+ * @param q_final The vector holding each link's final value from the previous chunk.
+ */
+static void SolveLink(const ModelSetup& setup,
+                      const RunoffData& runoff,
+                      std::vector<float>& results,
+                      const NodeInfo& node,
+                      size_t n_steps,
+                      size_t total_time_steps,
+                      size_t tc,
+                      std::vector<float>& q_final)
+{
+    // Prefine items for solver
+    auto rk45_dopri_stepper = make_controlled(setup.config.atol,
+                            setup.config.rtol,
+                            rk45_type());
+    double start_time = 0.0;                               // in minutes
+    double end_time   = (n_steps-1) * setup.config.dt;         // total time in minutes
+
+    const size_t level = node.level;
+
+    // Initialize the inflow series (y_p_series) for this link. This will be used to store inflow from parent nodes or boundary conditions
+    std::vector<float> y_p_series(n_steps, 0.0);
+    size_t y_p_resolution = setup.config.dt; // Resolution in minutes for y_p_series, default to dt unless boundary conditions are used
+
+    //Check for BC
+    bool has_bc = (setup.config.boundary_conditions_flag == 1) &&
+                (setup.boundary_conditions.idToIndex.find(node.stream_id) != setup.boundary_conditions.idToIndex.end());
+    if (has_bc) {
+        size_t bc_index = setup.boundary_conditions.idToIndex.at(node.stream_id);
+        size_t nTime = setup.boundary_conditions.nTime;
+        size_t t_start = total_time_steps/setup.config.boundary_conditions_resolution; // Convert total_time_steps to units of boundary conditions
+        y_p_resolution = setup.config.boundary_conditions_resolution; // resolution in minutes for y_p_series if boundary conditions are used
+        size_t bc_steps = static_cast<size_t>(y_p_resolution / setup.config.dt); // How many ODE steps correspond to one BC time step
+        for (size_t step = 0; step < n_steps; ++step) {
+            // Map ODE step index to BC index
+            size_t bc_time_index = t_start + step / bc_steps;
+            if (bc_time_index < nTime) {
+                y_p_series[step] = static_cast<double>(
+                    setup.boundary_conditions.data[bc_index * nTime + bc_time_index]
+                );
+            }
+        }
+    } else if (level > 0) {
+        for (size_t parent_index : node.parents) {
+            #pragma omp simd //vectorization
+            for (size_t t = 0; t < n_steps; ++t) {
+                y_p_series[t] += results[parent_index * n_steps + t];
+            }
+        }
+    }
+
+    // If reservoir routing is not needed, we can proceed with the ODE integration
+    // This is a placeholder for future implementation
+    if(setup.config.reservoir_routing_flag == 0){
+        //Get initial condition for this link
+        double q0;
+        if(tc == 0){
+            q0 = setup.uini(node.stream_id); // initial condition for this link from user
+        }else{
+            q0 = q_final[node.index]; // final step from results which uses node.index
+
+            if (q0 <= 0.0) {
+                std::cerr << "Warning: Initial discharge for link " << node.index << " is non-positive." << std::endl;
+                exit(EXIT_FAILURE);
+            }
+        }
+        //  Parameters for the ODE
+        const double A_h = node.params[0]; // hillslope area in m^2
+        const double lambda_1 = node.params[2];
+        const double L_i = node.params[1]; // stream link length in m
+        const double v_0 = node.params[3]; // reference channel velocity in m/s
+        const double invtau = 60.0 * v_0 / ((1.0 - lambda_1) * L_i);
+
+        //runoff pointer
+        const size_t runoff_index = runoff.idToIndex.at(node.stream_id);
+        const float* runoff_ptr = &runoff.data[runoff_index * runoff.nTime];
+
+        //solve ODE
+        // Callback function to store results
+        auto callback = [&](const double& x, const double t) {
+            // Convert time t to step index
+            size_t step_idx = static_cast<size_t>(t / setup.config.dt);
+            // Clamp to last valid index
+            if (step_idx >= n_steps) step_idx = n_steps - 1;
+            size_t idx = node.index * n_steps + step_idx;
+            results[idx] = std::max(x, 1e-8);
+        };
+        RHS rhs(runoff_ptr, setup.config.runoff_resolution,
+                y_p_series, y_p_resolution,
+                A_h,lambda_1,invtau);
+
+        //integrator based on level
+        if(level <= setup.config.rk4_level){
+            integrate_const(rk4_stepper, rhs, q0, start_time, end_time, setup.config.dt, callback);
+        }else{
+            integrate_const(rk45_dopri_stepper,
+                            rhs,
+                            q0,
+                            start_time,
+                            end_time,
+                            setup.config.dt,                       // time step in minutes
+                            callback);
+        }
+    }else{
+        // Placeholder for reservoir routing logic
+        //exit code with failure
+        std::cerr << "Reservoir routing is not implemented yet. Exiting..." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+}
+
+/**
+ * @brief Integrates the ODEs for each link at a given level.
+ * This function uses OpenMP to parallelize the integration process for each link.
+ * Every link at a level is independent: a link's parents all sit at lower levels and
+ * were solved before the barrier that closed the previous level.
+ *
+ * @param setup The model setup containing configuration and node information.
+ * @param runoff The runoff data for the current time chunk.
+ * @param results The results vector to store the integrated values for each link.
  * @param level The current level of links being processed.
- * @param nodes_at_level The vector of node indices at the current level.   
+ * @param nodes_at_level The vector of node indices at the current level.
  * @param n_steps The number of time steps in the simulation.
  * @param total_time_steps The total number of time steps processed so far.
  * @param tc The current time chunk index.
@@ -157,13 +284,6 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
                            std::vector<float>& q_final,
                            LevelProfiler& profiler)
 {
-    // Prefine items for solver
-    auto rk45_dopri_stepper = make_controlled(setup.config.atol, 
-                            setup.config.rtol, 
-                            rk45_type());
-    double start_time = 0.0;                               // in minutes
-    double end_time   = (n_steps-1) * setup.config.dt;         // total time in minutes
-    
     profiler.beginLevel(tc, level, nodes_at_level.size());
 
     // Solve ODE for each link at this level.
@@ -175,95 +295,7 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
         size_t link_index = nodes_at_level[i];
         const NodeInfo& node = setup.node_map.at(link_index);  // Safe to access from multiple threads
 
-        // Initialize the inflow series (y_p_series) for this link. This will be used to store inflow from parent nodes or boundary conditions
-        std::vector<float> y_p_series(n_steps, 0.0);
-        size_t y_p_resolution = setup.config.dt; // Resolution in minutes for y_p_series, default to dt unless boundary conditions are used
-
-        //Check for BC
-        bool has_bc = (setup.config.boundary_conditions_flag == 1) &&
-                    (setup.boundary_conditions.idToIndex.find(node.stream_id) != setup.boundary_conditions.idToIndex.end());
-        if (has_bc) {
-            size_t bc_index = setup.boundary_conditions.idToIndex.at(node.stream_id);
-            size_t nTime = setup.boundary_conditions.nTime;
-            size_t t_start = total_time_steps/setup.config.boundary_conditions_resolution; // Convert total_time_steps to units of boundary conditions
-            y_p_resolution = setup.config.boundary_conditions_resolution; // resolution in minutes for y_p_series if boundary conditions are used
-            size_t bc_steps = static_cast<size_t>(y_p_resolution / setup.config.dt); // How many ODE steps correspond to one BC time step
-            for (size_t step = 0; step < n_steps; ++step) {
-                // Map ODE step index to BC index
-                size_t bc_time_index = t_start + step / bc_steps;
-                if (bc_time_index < nTime) {
-                    y_p_series[step] = static_cast<double>(
-                        setup.boundary_conditions.data[bc_index * nTime + bc_time_index]
-                    );
-                }
-            }
-        } else if (level > 0) {
-            for (size_t parent_index : node.parents) {
-                #pragma omp simd //vectorization
-                for (size_t t = 0; t < n_steps; ++t) {
-                    y_p_series[t] += results[parent_index * n_steps + t];
-                }
-            }
-        }
-
-        // If reservoir routing is not needed, we can proceed with the ODE integration
-        // This is a placeholder for future implementation
-        if(setup.config.reservoir_routing_flag == 0){
-            //Get initial condition for this link
-            double q0;
-            if(tc == 0){
-                q0 = setup.uini(node.stream_id); // initial condition for this link from user
-            }else{
-                q0 = q_final[node.index]; // final step from results which uses node.index
-
-                if (q0 <= 0.0) {
-                    std::cerr << "Warning: Initial discharge for link " << node.index << " is non-positive." << std::endl;
-                    exit(EXIT_FAILURE);
-                }
-            }
-            //  Parameters for the ODE
-            const double A_h = node.params[0]; // hillslope area in m^2
-            const double lambda_1 = node.params[2];
-            const double L_i = node.params[1]; // stream link length in m
-            const double v_0 = node.params[3]; // reference channel velocity in m/s
-            const double invtau = 60.0 * v_0 / ((1.0 - lambda_1) * L_i);
-
-            //runoff pointer
-            const size_t runoff_index = runoff.idToIndex.at(node.stream_id);
-            const float* runoff_ptr = &runoff.data[runoff_index * runoff.nTime];
-
-            //solve ODE
-            // Callback function to store results
-            auto callback = [&](const double& x, const double t) {
-                // Convert time t to step index
-                size_t step_idx = static_cast<size_t>(t / setup.config.dt);
-                // Clamp to last valid index
-                if (step_idx >= n_steps) step_idx = n_steps - 1;
-                size_t idx = node.index * n_steps + step_idx;
-                results[idx] = std::max(x, 1e-8);
-            };
-            RHS rhs(runoff_ptr, setup.config.runoff_resolution, 
-                    y_p_series, y_p_resolution,
-                    A_h,lambda_1,invtau);
-            
-            //integrator based on level
-            if(level <= setup.config.rk4_level){
-                integrate_const(rk4_stepper, rhs, q0, start_time, end_time, setup.config.dt, callback);
-            }else{
-                integrate_const(rk45_dopri_stepper, 
-                                rhs, 
-                                q0, 
-                                start_time, 
-                                end_time,
-                                setup.config.dt,                       // time step in minutes
-                                callback);
-            }   
-        }else{
-            // Placeholder for reservoir routing logic
-            //exit code with failure
-            std::cerr << "Reservoir routing is not implemented yet. Exiting..." << std::endl;
-            exit(EXIT_FAILURE);
-        }
+        SolveLink(setup, runoff, results, node, n_steps, total_time_steps, tc, q_final);
 
         if (profiler.enabled()) profiler.recordLink(omp_get_wtime() - link_start);
     }
