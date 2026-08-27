@@ -60,6 +60,12 @@ struct ModelConfig {
     int max_output; // 0 for no max output, 1 for max output
     std::string max_output_filepath;
 
+    // Profiling (all optional, defaults reproduce the previous behaviour exactly)
+    int profile_level_timing; // 0 for no per-level timing, 1 to write the per-level CSV
+    std::string profile_filepath; // path for the per-level CSV, only for flag 1
+    std::string omp_schedule; // "static", "dynamic" or "guided" for the link loop
+    int omp_chunk; // chunk size for the schedule above, 0 for the OpenMP default
+
 };
 
 /**

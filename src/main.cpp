@@ -9,6 +9,7 @@ int main(int argc, char* argv[])
     printBuildInfo(); // Print build information
     setupOpenMP(); // Set up OpenMP
     ModelSetup setup = setupModel(argv[1]); // Set up the model using the provided configuration file
+    applyOmpSchedule(setup.config.omp_schedule, setup.config.omp_chunk); // Schedule for the link loop
     runRouting(setup); // Run the routing process
     printEndInfo(); // Print end information
     return 0;

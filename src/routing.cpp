@@ -13,6 +13,7 @@ using namespace boost::numeric::odeint;
 #include "I_O/inputs.hpp"
 #include "models/RHS.hpp"
 #include "utils/time.hpp"
+#include "utils/level_timing.hpp"
 
 //--------------------------------------------------------------------------------------------------
 // Function Definitions
@@ -142,6 +143,8 @@ void writeOutput(const ModelSetup& setup,
  * @param total_time_steps The total number of time steps processed so far.
  * @param tc The current time chunk index.
  * @param q_final The vector to store final results for each link.
+ * @param profiler Per-level timer. Records the level's wall time and each link's solve
+ *                 time when enabled; a no-op otherwise. Does not affect results.
  */
 void IntegrateLinksAtLevel(const ModelSetup& setup,
                            const RunoffData& runoff,
@@ -151,8 +154,9 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
                            size_t n_steps,
                            size_t total_time_steps,
                            size_t tc,
-                           std::vector<float>& q_final)
-{   
+                           std::vector<float>& q_final,
+                           LevelProfiler& profiler)
+{
     // Prefine items for solver
     auto rk45_dopri_stepper = make_controlled(setup.config.atol, 
                             setup.config.rtol, 
@@ -160,9 +164,14 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
     double start_time = 0.0;                               // in minutes
     double end_time   = (n_steps-1) * setup.config.dt;         // total time in minutes
     
-    // Solve ODE for each link at this level
-    #pragma omp parallel for schedule(static)
+    profiler.beginLevel(tc, level, nodes_at_level.size());
+
+    // Solve ODE for each link at this level.
+    // The schedule is set at runtime from profiling.omp_schedule, so static, dynamic and
+    // guided can be compared without a rebuild. It defaults to static, as before.
+    #pragma omp parallel for schedule(runtime)
     for (size_t i = 0; i < nodes_at_level.size(); ++i) {
+        double link_start = profiler.enabled() ? omp_get_wtime() : 0.0;
         size_t link_index = nodes_at_level[i];
         const NodeInfo& node = setup.node_map.at(link_index);  // Safe to access from multiple threads
 
@@ -256,7 +265,12 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
             exit(EXIT_FAILURE);
         }
 
+        if (profiler.enabled()) profiler.recordLink(omp_get_wtime() - link_start);
     }
+
+    // Outside the loop, so this runs after the implicit barrier and the level's wall
+    // time includes the wait.
+    profiler.endLevel();
 }
 
 /**
@@ -271,12 +285,13 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
  * @param startIndex The start index for the current chunk.
  */
 
-void ProcessChunk(const ModelSetup& setup, 
-                  size_t tc, 
-                  size_t& total_time_steps, 
+void ProcessChunk(const ModelSetup& setup,
+                  size_t tc,
+                  size_t& total_time_steps,
                   std::vector<float>& q_final,
                   size_t& startIndex,
-                  std::vector<float>& results)
+                  std::vector<float>& results,
+                  LevelProfiler& profiler)
 {
     std::cout << "Processing chunk/file " << tc + 1 << " of " << setup.runoff_info.nchunks << ":" << std::endl;
 
@@ -333,12 +348,16 @@ void ProcessChunk(const ModelSetup& setup,
     auto solve_start = std::chrono::high_resolution_clock::now();
     // Loop through each level and process nodes
     for (const auto& [level, nodes_at_level] : setup.level_groups) {
-        IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final);
+        IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final, profiler);
     }
     std::cout << "completed!" << std::endl;
     auto solve_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> solve_elapsed = solve_end - solve_start ;
     std::cout << "  Total integration time: " << solve_elapsed.count() << " seconds" << std::endl;
+
+    // Append this chunk's per-level rows now, so a job that is killed part way through a
+    // multi-chunk run still leaves the levels it did finish on disk.
+    profiler.writeChunk();
 
     // Update total time steps for the next chunk
     total_time_steps += t_final; //time in minutes for this chunk
@@ -365,6 +384,10 @@ void runRouting(const ModelSetup& setup){
     std::cout << "_________________STARTING ROUTING_________________ \n" << std::endl;
     std::vector<float> q_final(setup.n_links); //define q_final to store final results for each link
 
+    // Per-level timing, off unless profiling.level_timing is 1
+    LevelProfiler profiler;
+    if (setup.config.profile_level_timing == 1) profiler.enable(setup.config.profile_filepath);
+
     //reserving max size up front
     size_t max_size = static_cast<size_t>(setup.config.chunk_size * setup.config.runoff_resolution * setup.n_links / setup.config.dt);
     std::vector<float> results;          // declare the vector
@@ -374,8 +397,10 @@ void runRouting(const ModelSetup& setup){
     size_t total_time_steps = 0; // keep tract of total simulation time
     size_t startIndex = 0; // start index for the first chunk
     for(int tc = 0; tc < setup.runoff_info.nchunks; ++tc){
-        ProcessChunk(setup, tc, total_time_steps, q_final, startIndex, results);
+        ProcessChunk(setup, tc, total_time_steps, q_final, startIndex, results, profiler);
     }
     std::cout << "__________________________________________________ \n" << std::endl;
+
+    profiler.printSummary();
 }
 // End of file: Tiger_HLM_Routing/src/routing.cpp

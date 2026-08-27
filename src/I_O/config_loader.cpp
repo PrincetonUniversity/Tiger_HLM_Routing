@@ -337,5 +337,17 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
     config.max_output = parser.getInt("output.max_output", 0); // Default to 0 if not specified
     config.max_output_filepath = parser.getString("output.max_output_filepath");
 
+    // Load profiling options. All default to the previous behaviour, so configs written
+    // before these keys existed run unchanged.
+    config.profile_level_timing = parser.getInt("profiling.level_timing", 0);
+    config.profile_filepath = parser.getString("profiling.filepath", "");
+    config.omp_schedule = parser.getString("profiling.omp_schedule", "static");
+    config.omp_chunk = parser.getInt("profiling.omp_chunk", 0);
+    if (config.profile_level_timing == 1 && config.profile_filepath.empty()) {
+        std::cerr << "Warning: profiling.level_timing is 1 but profiling.filepath is empty. "
+                  << "Disabling per-level timing." << std::endl;
+        config.profile_level_timing = 0;
+    }
+
     return config;
 }
