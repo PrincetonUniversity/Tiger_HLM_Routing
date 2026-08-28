@@ -21,6 +21,8 @@ struct ModelConfig {
     double dt;
     double rtol;
     double atol;
+    std::string traversal; // "level" for the level-synchronous path, "counter" for the
+                           // dependency-driven one. Defaults to "level".
        
     // Parameters
     std::string parameters_file;

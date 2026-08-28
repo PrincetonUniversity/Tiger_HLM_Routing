@@ -1,6 +1,7 @@
 #include "routing.hpp"
 
 // C++ standard libraries
+#include <atomic>
 #include <iostream>
 #include <vector>
 #include <boost/numeric/odeint.hpp>
@@ -8,6 +9,7 @@ using namespace boost::numeric::odeint;
 #include <omp.h>
 
 //my functions
+#include "dependency_graph.hpp"
 #include "model_setup.hpp"
 #include "I_O/output_series.hpp"
 #include "I_O/inputs.hpp"
@@ -305,6 +307,92 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
     profiler.endLevel();
 }
 
+//--------------------------------------------------------------------------------------------------
+// Dependency-driven traversal
+//--------------------------------------------------------------------------------------------------
+/**
+ * @brief Solves one link, then releases its downstream link if it was the last parent.
+ * This is where the dependency is enforced; there is no barrier.
+ *
+ * Parents may finish in any order. Exactly one of them reads back the old value 1 and
+ * spawns the child, so the child is spawned once: no lost wakeup, no double spawn.
+ * acq_rel also publishes this link's writes to results and acquires the other parents',
+ * so the child reads complete parent series.
+ *
+ * @param ctx Shared context for the chunk being solved.
+ * @param link_index The link to solve.
+ */
+static void SolveAndRelease(TaskContext ctx, size_t link_index)
+{
+    const NodeInfo& node = ctx.setup.node_map.at(link_index);
+    SolveLink(ctx.setup, ctx.runoff, ctx.results, node,
+              ctx.n_steps, ctx.total_time_steps, ctx.tc, ctx.q_final);
+
+    const size_t child_index = ctx.graph.child[link_index];
+    if (child_index == DependencyGraph::NO_CHILD) return;  // an outlet releases nothing
+
+    if (ctx.pending[child_index].fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        // ctx is firstprivate, not shared: the task is deferred, and this frame is gone
+        // long before another thread runs it. Sharing it would leave the task reading a
+        // dead stack frame -- which segfaults late and at random, not here.
+        #pragma omp task firstprivate(ctx, child_index) default(shared)
+        SolveAndRelease(ctx, child_index);
+    }
+}
+
+/**
+ * @brief Solves every link in the network by dependency rather than by level.
+ * A link becomes eligible as soon as its own upstream links are done, so a finished
+ * headwater branch runs downstream while other branches are still upstream.
+ *
+ * NOTE ON STACK: tasks run nested inside barrier waits, so stack depth grows with
+ * concurrency, and Boost's integrate_const is not cheap in stack. Set OMP_STACKSIZE
+ * generously. Check here first if this path crashes at width.
+ *
+ * @param setup The model setup containing configuration and node information.
+ * @param runoff The runoff data for the current time chunk.
+ * @param results The results vector to store the integrated values for each link.
+ * @param graph The dependency graph, built once for the run.
+ * @param pending Per-link countdown, reset here for this chunk.
+ * @param n_steps The number of time steps in the simulation.
+ * @param total_time_steps The total number of time steps processed so far.
+ * @param tc The current time chunk index.
+ * @param q_final The vector to store final results for each link.
+ */
+void IntegrateLinksByDependency(const ModelSetup& setup,
+                                const RunoffData& runoff,
+                                std::vector<float>& results,
+                                const DependencyGraph& graph,
+                                std::vector<std::atomic<int>>& pending,
+                                size_t n_steps,
+                                size_t total_time_steps,
+                                size_t tc,
+                                std::vector<float>& q_final)
+{
+    // Reset the countdown for this chunk. The network never changes, so this is a copy
+    // of the in-degrees rather than a rebuild of the graph 
+    #pragma omp parallel for schedule(static)
+    for (size_t i = 0; i < pending.size(); ++i) {
+        pending[i].store(graph.in_degree[i], std::memory_order_relaxed);
+    }
+
+    TaskContext ctx{setup, runoff, results, graph, pending.data(), q_final,
+                    n_steps, total_time_steps, tc};
+
+    #pragma omp parallel default(shared)
+    {
+        // One thread seeds the headwaters; every other thread is already at the closing
+        // barrier and starts taking tasks immediately.
+        #pragma omp single
+        {
+            for (size_t source_index : graph.sources) {
+                #pragma omp task firstprivate(ctx, source_index) default(shared)
+                SolveAndRelease(ctx, source_index);
+            }
+        }
+    }
+}
+
 /**
  * @brief Processes a single chunk of runoff data.
  * This function reads runoff data from a netCDF file, sets up the time series, initializes the results matrix,
@@ -323,6 +411,8 @@ void ProcessChunk(const ModelSetup& setup,
                   std::vector<float>& q_final,
                   size_t& startIndex,
                   std::vector<float>& results,
+                  const DependencyGraph& graph,
+                  std::vector<std::atomic<int>>& pending,
                   LevelProfiler& profiler)
 {
     std::cout << "Processing chunk/file " << tc + 1 << " of " << setup.runoff_info.nchunks << ":" << std::endl;
@@ -378,9 +468,14 @@ void ProcessChunk(const ModelSetup& setup,
     //  -------------- SOLVING ODEs ----------------------------------
     std::cout << "  Starting integration for each link..."  << std::flush;
     auto solve_start = std::chrono::high_resolution_clock::now();
-    // Loop through each level and process nodes
-    for (const auto& [level, nodes_at_level] : setup.level_groups) {
-        IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final, profiler);
+    if (setup.config.traversal == "counter") {
+        // Dependency-driven: a link runs as soon as its own upstream links are done.
+        IntegrateLinksByDependency(setup, runoff, results, graph, pending, n_steps, total_time_steps, tc, q_final);
+    } else {
+        // Level-synchronous: loop through each level and process nodes.
+        for (const auto& [level, nodes_at_level] : setup.level_groups) {
+            IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final, profiler);
+        }
     }
     std::cout << "completed!" << std::endl;
     auto solve_end = std::chrono::high_resolution_clock::now();
@@ -416,9 +511,30 @@ void runRouting(const ModelSetup& setup){
     std::cout << "_________________STARTING ROUTING_________________ \n" << std::endl;
     std::vector<float> q_final(setup.n_links); //define q_final to store final results for each link
 
+    std::cout << "  Traversal: " << setup.config.traversal
+              << (setup.config.traversal == "counter" ? " (dependency-driven)"
+                                                      : " (level-synchronous)") << std::endl;
+
     // Per-level timing, off unless profiling.level_timing is 1
     LevelProfiler profiler;
-    if (setup.config.profile_level_timing == 1) profiler.enable(setup.config.profile_filepath);
+    if (setup.config.profile_level_timing == 1) {
+        if (setup.config.traversal == "counter") {
+            // The counter traversal has no levels to time
+            std::cout << "  Note: profiling.level_timing does not apply to the counter "
+                      << "traversal. Per-level timing is off for this run." << std::endl;
+        } else {
+            profiler.enable(setup.config.profile_filepath);
+        }
+    }
+
+    // Built once: the network is fixed for the whole run, so only the countdown is reset
+    // per chunk. Costs nothing on the level path beyond the setup pass.
+    DependencyGraph graph;
+    std::vector<std::atomic<int>> pending;
+    if (setup.config.traversal == "counter") {
+        graph = BuildDependencyGraph(setup);
+        pending = std::vector<std::atomic<int>>(setup.n_links);
+    }
 
     //reserving max size up front
     size_t max_size = static_cast<size_t>(setup.config.chunk_size * setup.config.runoff_resolution * setup.n_links / setup.config.dt);
@@ -429,7 +545,7 @@ void runRouting(const ModelSetup& setup){
     size_t total_time_steps = 0; // keep tract of total simulation time
     size_t startIndex = 0; // start index for the first chunk
     for(int tc = 0; tc < setup.runoff_info.nchunks; ++tc){
-        ProcessChunk(setup, tc, total_time_steps, q_final, startIndex, results, profiler);
+        ProcessChunk(setup, tc, total_time_steps, q_final, startIndex, results, graph, pending, profiler);
     }
     std::cout << "__________________________________________________ \n" << std::endl;
 
