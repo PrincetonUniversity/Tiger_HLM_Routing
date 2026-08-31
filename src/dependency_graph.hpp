@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "model_setup.hpp"
+#include "partition.hpp"
 #include "I_O/inputs.hpp"
 
 /**
@@ -27,6 +28,7 @@ struct DependencyGraph {
  */
 struct TaskContext {
     const ModelSetup&       setup;
+    const Partition&        part;
     const RunoffData&       runoff;
     std::vector<float>&     results;
     const DependencyGraph&  graph;

@@ -345,6 +345,9 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
     config.max_output = parser.getInt("output.max_output", 0); // Default to 0 if not specified
     config.max_output_filepath = parser.getString("output.max_output_filepath");
 
+    // Absent, the run owns the whole network on one rank
+    config.mpi_partition_file = parser.getString("mpi.partition_file", "");
+
     // Load profiling options. All default to the previous behaviour, so configs written
     // before these keys existed run unchanged.
     config.profile_level_timing = parser.getInt("profiling.level_timing", 0);

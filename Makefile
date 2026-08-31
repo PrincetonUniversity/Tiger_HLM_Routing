@@ -14,6 +14,7 @@ SRC := src/main.cpp \
        src/omp_info.cpp \
        src/model_setup.cpp \
        src/dependency_graph.cpp \
+       src/partition.cpp \
        src/routing.cpp \
        src/end_info.cpp \
        src/I_O/node_info.cpp \

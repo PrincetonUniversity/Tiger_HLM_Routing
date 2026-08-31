@@ -62,6 +62,10 @@ struct ModelConfig {
     int max_output; // 0 for no max output, 1 for max output
     std::string max_output_filepath;
 
+    // Distribution across MPI ranks.
+    // Empty is behaviour before partitioning: a single rank owning every link
+    std::string mpi_partition_file; // built by tools/partition.py
+
     // Profiling (all optional, defaults reproduce the previous behaviour exactly)
     int profile_level_timing; // 0 for no per-level timing, 1 to write the per-level CSV
     std::string profile_filepath; // path for the per-level CSV, only for flag 1
