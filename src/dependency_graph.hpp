@@ -6,6 +6,8 @@
 
 #include "model_setup.hpp"
 #include "partition.hpp"
+
+struct BoundaryExchange;
 #include "I_O/inputs.hpp"
 
 /**
@@ -29,6 +31,7 @@ struct DependencyGraph {
 struct TaskContext {
     const ModelSetup&       setup;
     const Partition&        part;
+    const BoundaryExchange& ex;
     const RunoffData&       runoff;
     std::vector<float>&     results;
     const DependencyGraph&  graph;
@@ -43,7 +46,15 @@ struct TaskContext {
  * @brief Inverts the parent lists into the child/in-degree form the countdown needs.
  * Derived from node_map; no new input file.
  *
+ * in_degree counts only parents THIS RANK owns. A parent on another rank is satisfied by
+ * its series arriving in the boundary exchange, not by any local link finishing, so
+ * counting it would leave the countdown permanently short of zero and the link would never
+ * run -- the traversal would sit at the barrier until the job was killed. Because the
+ * exchange is bulk and completes before solving starts, a link whose parents are all remote
+ * legitimately has in_degree 0 and is seeded with the headwaters.
+ *
  * @param setup The model setup containing the node map.
- * @return The dependency graph for the whole network.
+ * @param part Which links this rank owns.
+ * @return The dependency graph for the whole network, with local in-degrees.
  */
-DependencyGraph BuildDependencyGraph(const ModelSetup& setup);
+DependencyGraph BuildDependencyGraph(const ModelSetup& setup, const Partition& part);

@@ -4,6 +4,7 @@
 module purge
 module load intel/2024.2
 module load intel-oneapi/2024.2    # Optional, but some HDF5/NetCDF modules require it
+module load intel-mpi/oneapi/2021.13    # provides mpiicpx, the C++ MPI wrapper
 module load hdf5/oneapi-2024.2/1.14.4   
 module load netcdf/oneapi-2024.2/hdf5-1.14.4/4.9.2
 

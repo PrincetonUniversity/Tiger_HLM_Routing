@@ -15,7 +15,7 @@
  * @param setup The model setup containing the node map.
  * @return The dependency graph for the whole network.
  */
-DependencyGraph BuildDependencyGraph(const ModelSetup& setup)
+DependencyGraph BuildDependencyGraph(const ModelSetup& setup, const Partition& part)
 {
     DependencyGraph graph;
     graph.child.assign(setup.n_links, DependencyGraph::NO_CHILD);
@@ -28,7 +28,12 @@ DependencyGraph BuildDependencyGraph(const ModelSetup& setup)
                       << std::endl;
             exit(EXIT_FAILURE);
         }
-        graph.in_degree[node.index] = static_cast<int>(node.parents.size());
+        // Only local parents are counted; see the header for why remote ones must not be.
+        int local_parents = 0;
+        for (size_t p : node.parents) {
+            if (p < setup.n_links && part.owns(p)) ++local_parents;
+        }
+        graph.in_degree[node.index] = local_parents;
 
         for (size_t parent_index : node.parents) {
             if (parent_index >= setup.n_links) {
@@ -48,7 +53,8 @@ DependencyGraph BuildDependencyGraph(const ModelSetup& setup)
     }
 
     for (size_t i = 0; i < setup.n_links; ++i) {
-        if (graph.in_degree[i] == 0) graph.sources.push_back(i);
+        // Seed only links this rank will actually solve.
+        if (graph.in_degree[i] == 0 && part.owns(i)) graph.sources.push_back(i);
         if (graph.child[i] == DependencyGraph::NO_CHILD) ++graph.outlets;
     }
 

@@ -10,6 +10,7 @@ using namespace boost::numeric::odeint;
 
 //my functions
 #include "dependency_graph.hpp"
+#include "boundary_exchange.hpp"
 #include "partition.hpp"
 #include "model_setup.hpp"
 #include "I_O/output_series.hpp"
@@ -164,6 +165,7 @@ void writeOutput(const ModelSetup& setup,
  */
 static void SolveLink(const ModelSetup& setup,
                       const Partition& part,
+                      const BoundaryExchange& ex,
                       const RunoffData& runoff,
                       std::vector<float>& results,
                       const NodeInfo& node,
@@ -207,19 +209,28 @@ static void SolveLink(const ModelSetup& setup,
         }
     } else if (level > 0) {
         for (size_t parent_index : node.parents) {
-            // A parent on another rank arrives as a received boundary series rather than
-            // from results. Nothing supplies those yet, so refuse rather than silently
-            // routing this link against zeros.
+            // A parent on another rank contributes the series received in the boundary
+            // exchange; a local one contributes its own slice of results. The two are
+            // added in the same routing-table order either way, so where a parent lives
+            // cannot change the sum.
             const size_t parent_local = part.local_of[parent_index];
-            if (parent_local == Partition::NOT_OWNED) {
-                std::cerr << "Error: link " << node.index << " has parent " << parent_index
-                          << " on rank " << part.rank_of[parent_index] << ", but boundary "
-                          << "exchange is not implemented yet." << std::endl;
-                exit(EXIT_FAILURE);
+            const float* parent_series = nullptr;
+            if (parent_local != Partition::NOT_OWNED) {
+                parent_series = results.data() + parent_local * n_steps;
+            } else {
+                auto it = ex.arrived.find(parent_index);
+                if (it == ex.arrived.end()) {
+                    std::cerr << "Error: link " << node.index << " needs parent "
+                              << parent_index << " from rank " << part.rank_of[parent_index]
+                              << ", which did not arrive in the boundary exchange."
+                              << std::endl;
+                    exit(EXIT_FAILURE);
+                }
+                parent_series = it->second;
             }
             #pragma omp simd //vectorization
             for (size_t t = 0; t < n_steps; ++t) {
-                y_p_series[t] += results[parent_local * n_steps + t];
+                y_p_series[t] += parent_series[t];
             }
         }
     }
@@ -304,6 +315,7 @@ static void SolveLink(const ModelSetup& setup,
  */
 void IntegrateLinksAtLevel(const ModelSetup& setup,
                            const Partition& part,
+                           const BoundaryExchange& ex,
                            const RunoffData& runoff,
                            std::vector<float>& results,
                            size_t level,
@@ -326,7 +338,7 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
         if (!part.owns(link_index)) continue;  // another rank solves this one
         const NodeInfo& node = setup.node_map.at(link_index);  // Safe to access from multiple threads
 
-        SolveLink(setup, part, runoff, results, node, n_steps, total_time_steps, tc, q_final);
+        SolveLink(setup, part, ex, runoff, results, node, n_steps, total_time_steps, tc, q_final);
 
         if (profiler.enabled()) profiler.recordLink(omp_get_wtime() - link_start);
     }
@@ -354,11 +366,14 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
 static void SolveAndRelease(TaskContext ctx, size_t link_index)
 {
     const NodeInfo& node = ctx.setup.node_map.at(link_index);
-    SolveLink(ctx.setup, ctx.part, ctx.runoff, ctx.results, node,
+    SolveLink(ctx.setup, ctx.part, ctx.ex, ctx.runoff, ctx.results, node,
               ctx.n_steps, ctx.total_time_steps, ctx.tc, ctx.q_final);
 
     const size_t child_index = ctx.graph.child[link_index];
     if (child_index == DependencyGraph::NO_CHILD) return;  // an outlet releases nothing
+    // A child on another rank is released by the boundary exchange after this chunk, not
+    // by a counter here. Its rank does not count this parent in its in-degree.
+    if (!ctx.part.owns(child_index)) return;
 
     if (ctx.pending[child_index].fetch_sub(1, std::memory_order_acq_rel) == 1) {
         // ctx is firstprivate, not shared: the task is deferred, and this frame is gone
@@ -390,6 +405,7 @@ static void SolveAndRelease(TaskContext ctx, size_t link_index)
  */
 void IntegrateLinksByDependency(const ModelSetup& setup,
                                 const Partition& part,
+                                const BoundaryExchange& ex,
                                 const RunoffData& runoff,
                                 std::vector<float>& results,
                                 const DependencyGraph& graph,
@@ -406,7 +422,7 @@ void IntegrateLinksByDependency(const ModelSetup& setup,
         pending[i].store(graph.in_degree[i], std::memory_order_relaxed);
     }
 
-    TaskContext ctx{setup, part, runoff, results, graph, pending.data(), q_final,
+    TaskContext ctx{setup, part, ex, runoff, results, graph, pending.data(), q_final,
                     n_steps, total_time_steps, tc};
 
     #pragma omp parallel default(shared)
@@ -437,6 +453,7 @@ void IntegrateLinksByDependency(const ModelSetup& setup,
 
 void ProcessChunk(const ModelSetup& setup,
                   const Partition& part,
+                  BoundaryExchange& ex,
                   size_t tc,
                   size_t& total_time_steps,
                   std::vector<float>& q_final,
@@ -499,15 +516,20 @@ void ProcessChunk(const ModelSetup& setup,
     //  -------------- SOLVING ODEs ----------------------------------
     std::cout << "  Starting integration for each link..."  << std::flush;
     auto solve_start = std::chrono::high_resolution_clock::now();
+    // Every series this rank needs from upstream ranks, before any link is solved. The
+    // call blocks, so a waiting rank sleeps rather than spinning.
+    ReceiveBoundaries(ex, n_steps);
     if (setup.config.traversal == "counter") {
         // Dependency-driven: a link runs as soon as its own upstream links are done.
-        IntegrateLinksByDependency(setup, part, runoff, results, graph, pending, n_steps, total_time_steps, tc, q_final);
+        IntegrateLinksByDependency(setup, part, ex, runoff, results, graph, pending, n_steps, total_time_steps, tc, q_final);
     } else {
         // Level-synchronous: loop through each level and process nodes.
         for (const auto& [level, nodes_at_level] : setup.level_groups) {
-            IntegrateLinksAtLevel(setup, part, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final, profiler);
+            IntegrateLinksAtLevel(setup, part, ex, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final, profiler);
         }
     }
+    // Hand this rank's cut-edge series to the ranks downstream of it.
+    SendBoundaries(ex, part, results, n_steps);
     std::cout << "completed!" << std::endl;
     auto solve_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> solve_elapsed = solve_end - solve_start ;
@@ -538,12 +560,12 @@ void ProcessChunk(const ModelSetup& setup,
  * and outputs the results to netCDF files.
  * @param setup The model setup containing configuration, node information, and other parameters.
  */
-void runRouting(const ModelSetup& setup){
+void runRouting(const ModelSetup& setup, int rank, int n_ranks){
     std::cout << "_________________STARTING ROUTING_________________ \n" << std::endl;
     // Which links this rank owns. Without mpi.partition_file this is one rank owning
     // everything, with local index == global index, i.e. the behaviour before
     // partitioning existed.
-    const Partition part = LoadPartition(setup.n_links, setup.config.mpi_partition_file, 0, 1);
+    const Partition part = LoadPartition(setup.n_links, setup.config.mpi_partition_file, rank, n_ranks);
 
     std::vector<float> q_final(part.n_owned()); //final value per owned link, local indices
 
@@ -565,11 +587,22 @@ void runRouting(const ModelSetup& setup){
 
     // Built once: the network is fixed for the whole run, so only the countdown is reset
     // per chunk. Costs nothing on the level path beyond the setup pass.
+    // The graph is needed by the counter traversal and by the exchange (for child[]), so
+    // it is built whenever either applies.
     DependencyGraph graph;
     std::vector<std::atomic<int>> pending;
+    if (setup.config.traversal == "counter" || part.distributed()) {
+        graph = BuildDependencyGraph(setup, part);
+    }
     if (setup.config.traversal == "counter") {
-        graph = BuildDependencyGraph(setup);
         pending = std::vector<std::atomic<int>>(setup.n_links);
+    }
+    BoundaryExchange ex = BuildBoundaryExchange(part, graph);
+    ex.lookahead = setup.config.mpi_lookahead_chunks;
+    if (part.distributed()) {
+        std::cout << "  Pipelining: lookahead_chunks = " << ex.lookahead
+                  << (ex.lookahead ? " (a rank runs a chunk ahead)" : " (lockstep)")
+                  << std::endl;
     }
 
     //reserving max size up front
@@ -581,8 +614,9 @@ void runRouting(const ModelSetup& setup){
     size_t total_time_steps = 0; // keep tract of total simulation time
     size_t startIndex = 0; // start index for the first chunk
     for(int tc = 0; tc < setup.runoff_info.nchunks; ++tc){
-        ProcessChunk(setup, part, tc, total_time_steps, q_final, startIndex, results, graph, pending, profiler);
+        ProcessChunk(setup, part, ex, tc, total_time_steps, q_final, startIndex, results, graph, pending, profiler);
     }
+    FinishBoundaries(ex);   // no message may still be in flight at MPI_Finalize
     std::cout << "__________________________________________________ \n" << std::endl;
 
     profiler.printSummary();

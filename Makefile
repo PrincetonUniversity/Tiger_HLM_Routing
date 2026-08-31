@@ -1,5 +1,5 @@
 # ==== Compiler and Flags ====
-CXX := icpx
+CXX := mpiicpx
 CXXFLAGS := -O3 -ipo -fp-model fast=2 -qopenmp -fma \
             -xSapphireRapids -qopt-report-phase=vec -qopt-prefetch \
             -Rpass=loop-vectorize -Rpass=inline -DNDEBUG -std=c++17
@@ -15,6 +15,7 @@ SRC := src/main.cpp \
        src/model_setup.cpp \
        src/dependency_graph.cpp \
        src/partition.cpp \
+       src/boundary_exchange.cpp \
        src/routing.cpp \
        src/end_info.cpp \
        src/I_O/node_info.cpp \

@@ -65,6 +65,8 @@ struct ModelConfig {
     // Distribution across MPI ranks.
     // Empty is behaviour before partitioning: a single rank owning every link
     std::string mpi_partition_file; // built by tools/partition.py
+    int mpi_lookahead_chunks; // 1: send non-blocking so a rank runs a chunk ahead of the
+                              // rank below it. 0: lockstep, for measuring what it buys.
 
     // Profiling (all optional, defaults reproduce the previous behaviour exactly)
     int profile_level_timing; // 0 for no per-level timing, 1 to write the per-level CSV

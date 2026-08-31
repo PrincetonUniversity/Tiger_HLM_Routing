@@ -347,6 +347,12 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
 
     // Absent, the run owns the whole network on one rank
     config.mpi_partition_file = parser.getString("mpi.partition_file", "");
+    config.mpi_lookahead_chunks = parser.getInt("mpi.lookahead_chunks", 1);
+    if (config.mpi_lookahead_chunks < 0 || config.mpi_lookahead_chunks > 1) {
+        std::cerr << "Warning: mpi.lookahead_chunks must be 0 or 1, got "
+                  << config.mpi_lookahead_chunks << ". Using 1." << std::endl;
+        config.mpi_lookahead_chunks = 1;
+    }
 
     // Load profiling options. All default to the previous behaviour, so configs written
     // before these keys existed run unchanged.
