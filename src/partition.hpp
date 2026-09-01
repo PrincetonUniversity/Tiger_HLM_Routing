@@ -41,9 +41,11 @@ struct Partition {
  * @param path Partition file, or "" for the single-rank identity partition.
  * @param rank This process's rank.
  * @param n_ranks Total ranks in the run.
+ * @param table_path Routing table the partition must match, for the error message.
  * @return The partition, or exits on a malformed file or a link-count mismatch.
  */
 Partition LoadPartition(size_t n_links,
                         const std::string& path,
                         int rank,
-                        int n_ranks);
+                        int n_ranks,
+                        const std::string& table_path = "<routing table csv>");

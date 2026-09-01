@@ -565,7 +565,8 @@ void runRouting(const ModelSetup& setup, int rank, int n_ranks){
     // Which links this rank owns. Without mpi.partition_file this is one rank owning
     // everything, with local index == global index, i.e. the behaviour before
     // partitioning existed.
-    const Partition part = LoadPartition(setup.n_links, setup.config.mpi_partition_file, rank, n_ranks);
+    const Partition part = LoadPartition(setup.n_links, setup.config.mpi_partition_file,
+                                        rank, n_ranks, setup.config.parameters_file);
 
     std::vector<float> q_final(part.n_owned()); //final value per owned link, local indices
 

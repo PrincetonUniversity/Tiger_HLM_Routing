@@ -32,10 +32,21 @@ void BuildLocalIndices(Partition& part, size_t n_links)
 
 } // namespace
 
+// Print command to build partitions on fatal partition error: 
+static std::string BuildHint(const std::string& table_path,
+                             int n_ranks,
+                             const std::string& out_path)
+{
+    return "  Build it with:\n    python3 tools/partition.py build "
+           + table_path + " " + std::to_string(n_ranks) + " "
+           + (out_path.empty() ? "<out.part>" : out_path);
+}
+
 Partition LoadPartition(size_t n_links,
                         const std::string& path,
                         int rank,
-                        int n_ranks)
+                        int n_ranks,
+                        const std::string& table_path)
 {
     Partition part;
     part.rank = rank;
@@ -45,8 +56,8 @@ Partition LoadPartition(size_t n_links,
         // No partition file: one rank owns everything and local index == global index.
         if (n_ranks != 1) {
             std::cerr << "Error: " << n_ranks << " ranks but no mpi.partition_file. "
-                      << "A distributed run needs a partition; build one with "
-                      << "tools/partition.py." << std::endl;
+                      << "A distributed run needs a partition.\n"
+                      << BuildHint(table_path, n_ranks, "") << std::endl;
             exit(EXIT_FAILURE);
         }
         part.rank_of.assign(n_links, 0);
@@ -58,15 +69,16 @@ Partition LoadPartition(size_t n_links,
 
     std::ifstream file(path, std::ios::binary);
     if (!file) {
-        std::cerr << "Error: failed to open partition file: " << path << std::endl;
+        std::cerr << "Error: failed to open partition file: " << path << "\n"
+                  << BuildHint(table_path, n_ranks, path) << std::endl;
         exit(EXIT_FAILURE);
     }
 
     char magic[8];
     file.read(magic, 8);
     if (!file || std::memcmp(magic, PART_MAGIC, 8) != 0) {
-        std::cerr << "Error: " << path << " is not a partition file (bad magic)."
-                  << std::endl;
+        std::cerr << "Error: " << path << " is not a partition file (bad magic).\n"
+                  << BuildHint(table_path, n_ranks, path) << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -83,12 +95,14 @@ Partition LoadPartition(size_t n_links,
     if (n_links_file != n_links) {
         std::cerr << "Error: " << path << " was built for " << n_links_file
                   << " links but the routing table has " << n_links
-                  << ". Wrong partition for this network." << std::endl;
+                  << ". Wrong partition for this network.\n"
+                  << BuildHint(table_path, n_ranks, path) << std::endl;
         exit(EXIT_FAILURE);
     }
     if (static_cast<int>(n_ranks_file) != n_ranks) {
         std::cerr << "Error: " << path << " was built for " << n_ranks_file
-                  << " ranks but the run has " << n_ranks << "." << std::endl;
+                  << " ranks but the run has " << n_ranks << ".\n"
+                  << BuildHint(table_path, n_ranks, path) << std::endl;
         exit(EXIT_FAILURE);
     }
 
