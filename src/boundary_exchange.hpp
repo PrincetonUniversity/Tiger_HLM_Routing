@@ -12,19 +12,15 @@
  * @brief The links whose discharge has to cross between ranks, and the buffers for them.
  *
  * A cut edge is a link whose downstream link is owned by a different rank. The upstream
- * rank computes the series; the downstream rank needs it to form that child's inflow. The
- * partitioner keeps these rare -- a few hundred at most, each carrying n_steps floats
- * (~5.7 KB for a 1-day chunk) -- so this is about ordering, not bandwidth.
+ * rank computes the series; the downstream rank needs it to form that child's inflow.
+ *
+ * partition.py assigns ranks in topological order, so every cut edge runs low rank ->
+ * high rank and its validator rejects backward edges. Receiving from all lower ranks
+ * then sending to all higher ones therefore cannot deadlock.
  *
  * All series crossing a given rank pair travel in ONE message, packed in increasing global
  * link index. Both sides derive that order from the partition, so no keys or tags per link
  * are needed and the two sides cannot disagree about the layout.
- *
- * Direction is guaranteed: tools/partition.py assigns ranks along a topological order, so
- * every cut edge runs from a lower rank to a higher one (its validator fails on any
- * "backward edge"). A rank can therefore receive from all lower ranks and then send to all
- * higher ones without deadlocking, and without needing non-blocking calls to break a cycle
- * that cannot exist.
  */
 struct BoundaryExchange {
     struct Peer {
@@ -65,10 +61,7 @@ BoundaryExchange BuildBoundaryExchange(const Partition& part, const DependencyGr
 /**
  * @brief Receives every incoming boundary series for this chunk, before solving starts.
  *
- * Blocking, so a rank waiting on an upstream neighbour sleeps rather than spinning. That
- * matters here beyond politeness: the level-synchronous path already burns 77% of cycles
- * in OpenMP barrier spin, which is what makes jobs look idle on jobstats, and doing the
- * same at rank scale would be worse.
+ * Blocking, so a rank waiting on an upstream neighbour sleeps rather than spinning.
  *
  * After this returns, every remote parent's series is in `arrived`, so a link with only
  * remote parents is genuinely ready and can be seeded like any headwater.
@@ -76,7 +69,7 @@ BoundaryExchange BuildBoundaryExchange(const Partition& part, const DependencyGr
  * @param ex The exchange plan; its buffers are filled.
  * @param n_steps Steps in this chunk.
  */
-void ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps);
+double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps);
 
 /**
  * @brief Sends this rank's outgoing boundary series once the chunk is solved.

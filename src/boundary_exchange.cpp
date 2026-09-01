@@ -3,6 +3,7 @@
 // C++ standard libraries
 #include <algorithm>
 #include <cstdlib>
+#include <chrono>
 #include <iostream>
 #include <map>
 
@@ -78,8 +79,10 @@ BoundaryExchange BuildBoundaryExchange(const Partition& part, const DependencyGr
     return ex;
 }
 
-void ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps)
+// Returns the seconds spent blocked
+double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps)
 {
+    const auto wait_start = std::chrono::high_resolution_clock::now();
     ex.arrived.clear();
     for (auto& peer : ex.recv_from) {
         peer.buffer.resize(peer.links.size() * n_steps);
@@ -90,6 +93,9 @@ void ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps)
             ex.arrived[peer.links[k]] = peer.buffer.data() + k * n_steps;
         }
     }
+    const std::chrono::duration<double> waited =
+        std::chrono::high_resolution_clock::now() - wait_start;
+    return waited.count();
 }
 
 void SendBoundaries(BoundaryExchange& ex,

@@ -518,7 +518,7 @@ void ProcessChunk(const ModelSetup& setup,
     auto solve_start = std::chrono::high_resolution_clock::now();
     // Every series this rank needs from upstream ranks, before any link is solved. The
     // call blocks, so a waiting rank sleeps rather than spinning.
-    ReceiveBoundaries(ex, n_steps);
+    const double boundary_wait = ReceiveBoundaries(ex, n_steps);
     if (setup.config.traversal == "counter") {
         // Dependency-driven: a link runs as soon as its own upstream links are done.
         IntegrateLinksByDependency(setup, part, ex, runoff, results, graph, pending, n_steps, total_time_steps, tc, q_final);
@@ -534,6 +534,7 @@ void ProcessChunk(const ModelSetup& setup,
     auto solve_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> solve_elapsed = solve_end - solve_start ;
     std::cout << "  Total integration time: " << solve_elapsed.count() << " seconds" << std::endl;
+    std::cout << "  Total boundary wait time: " << boundary_wait << " seconds" << std::endl;
 
     // Append this chunk's per-level rows now, so a job that is killed part way through a
     // multi-chunk run still leaves the levels it did finish on disk.
