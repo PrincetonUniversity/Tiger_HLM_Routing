@@ -85,12 +85,14 @@ double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps)
     const auto wait_start = std::chrono::high_resolution_clock::now();
     ex.arrived.clear();
     for (auto& peer : ex.recv_from) {
-        peer.buffer.resize(peer.links.size() * n_steps);
-        MPI_Recv(peer.buffer.data(), static_cast<int>(peer.buffer.size()), MPI_FLOAT,
+        if (peer.buffers.empty()) peer.buffers.resize(1);
+        std::vector<float>& buffer = peer.buffers[0];
+        buffer.resize(peer.links.size() * n_steps);
+        MPI_Recv(buffer.data(), static_cast<int>(buffer.size()), MPI_FLOAT,
                  peer.rank, BOUNDARY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         // Both sides pack in ascending global link index, so position determines identity.
         for (size_t k = 0; k < peer.links.size(); ++k) {
-            ex.arrived[peer.links[k]] = peer.buffer.data() + k * n_steps;
+            ex.arrived[peer.links[k]] = buffer.data() + k * n_steps;
         }
     }
     const std::chrono::duration<double> waited =
@@ -101,43 +103,47 @@ double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps)
 void SendBoundaries(BoundaryExchange& ex,
                     const Partition& part,
                     const std::vector<float>& results,
-                    size_t n_steps)
+                    size_t n_steps,
+                    size_t chunk)
 {
-    // The previous chunk's messages must have left before their buffers are refilled.
-    // Waiting here rather than at the send is the whole point: the rank spent the
-    // intervening chunk solving, so by now the transfer has almost certainly finished.
-    if (ex.sends_in_flight) {
-        for (auto& peer : ex.send_to) {
-            MPI_Wait(&peer.request, MPI_STATUS_IGNORE);
-        }
-        ex.sends_in_flight = false;
-    }
+    // Blocking sends still need somewhere to pack, so there is always at least one slot.
+    const size_t slots = static_cast<size_t>(std::max(1, ex.lookahead));
+    const size_t slot = chunk % slots;
 
     for (auto& peer : ex.send_to) {
-        peer.buffer.resize(peer.links.size() * n_steps);
+        if (peer.buffers.empty()) {
+            peer.buffers.resize(slots);
+            peer.requests.assign(slots, MPI_REQUEST_NULL);
+        }
+        // Reclaim this slot. Its message is `slots` chunks old, so with enough slots the
+        // wait is already satisfied and the rank never blocks here. MPI_Wait on a null
+        // request returns immediately, which covers the first pass and the blocking mode.
+        MPI_Wait(&peer.requests[slot], MPI_STATUS_IGNORE);
+
+        std::vector<float>& buffer = peer.buffers[slot];
+        buffer.resize(peer.links.size() * n_steps);
         for (size_t k = 0; k < peer.links.size(); ++k) {
             const size_t local = part.local_of[peer.links[k]];
             std::copy(results.begin() + static_cast<std::ptrdiff_t>(local * n_steps),
                       results.begin() + static_cast<std::ptrdiff_t>((local + 1) * n_steps),
-                      peer.buffer.begin() + static_cast<std::ptrdiff_t>(k * n_steps));
+                      buffer.begin() + static_cast<std::ptrdiff_t>(k * n_steps));
         }
         if (ex.lookahead > 0) {
-            MPI_Isend(peer.buffer.data(), static_cast<int>(peer.buffer.size()), MPI_FLOAT,
-                      peer.rank, BOUNDARY_TAG, MPI_COMM_WORLD, &peer.request);
+            MPI_Isend(buffer.data(), static_cast<int>(buffer.size()), MPI_FLOAT,
+                      peer.rank, BOUNDARY_TAG, MPI_COMM_WORLD, &peer.requests[slot]);
         } else {
-            MPI_Send(peer.buffer.data(), static_cast<int>(peer.buffer.size()), MPI_FLOAT,
+            MPI_Send(buffer.data(), static_cast<int>(buffer.size()), MPI_FLOAT,
                      peer.rank, BOUNDARY_TAG, MPI_COMM_WORLD);
         }
     }
-    if (ex.lookahead > 0) ex.sends_in_flight = true;
 }
 
 void FinishBoundaries(BoundaryExchange& ex)
 {
-    if (!ex.sends_in_flight) return;
     for (auto& peer : ex.send_to) {
-        MPI_Wait(&peer.request, MPI_STATUS_IGNORE);
+        for (auto& request : peer.requests) {
+            MPI_Wait(&request, MPI_STATUS_IGNORE);
+        }
     }
-    ex.sends_in_flight = false;
 }
 // End of file: Tiger_HLM_Routing/src/boundary_exchange.cpp

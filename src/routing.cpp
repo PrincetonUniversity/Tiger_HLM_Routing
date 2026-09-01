@@ -529,7 +529,7 @@ void ProcessChunk(const ModelSetup& setup,
         }
     }
     // Hand this rank's cut-edge series to the ranks downstream of it.
-    SendBoundaries(ex, part, results, n_steps);
+    SendBoundaries(ex, part, results, n_steps, tc);
     std::cout << "completed!" << std::endl;
     auto solve_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> solve_elapsed = solve_end - solve_start ;

@@ -26,8 +26,10 @@ struct BoundaryExchange {
     struct Peer {
         int                 rank = 0;   // the other end
         std::vector<size_t> links;      // global link indices, ascending
-        std::vector<float>  buffer;     // links.size() * n_steps
-        MPI_Request         request = MPI_REQUEST_NULL;  // in-flight send, lookahead only
+        // Send slots, used round robin. A slot cannot be refilled until its own message
+        // has left, so the count is how many chunks this rank may run ahead.
+        std::vector<std::vector<float>> buffers;   // [slot] of links.size() * n_steps
+        std::vector<MPI_Request>        requests;  // [slot], MPI_REQUEST_NULL when idle
     };
 
     std::vector<Peer> recv_from;  // lower ranks; their links are parents of links I own
@@ -37,11 +39,14 @@ struct BoundaryExchange {
     // small: one entry per cut edge arriving at this rank.
     std::unordered_map<size_t, const float*> arrived;
 
-    // 0: send blocking, so a rank cannot start the next chunk until its downstream
-    //    neighbour has taken this one. 1: send non-blocking and wait only when the buffer
-    //    is next needed, so a rank runs a chunk ahead of the rank below it.
+    // Chunks a rank may run ahead of the rank below it: N send slots per peer, or 0 to
+    // send blocking. A rank receives from every upstream peer before it solves anything,
+    // so a chunk crosses the rank graph in series; more slots let a rank carry on while
+    // its earlier sends are still in flight.
+    //
+    // The useful value is measured, not derived. It depends on rank count, chunk length
+    // and topology, and wall clock rises again past the optimum, so sweep it.
     int lookahead = 1;
-    bool sends_in_flight = false;
 
     bool empty() const { return recv_from.empty() && send_to.empty(); }
 };
@@ -74,10 +79,9 @@ double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps);
 /**
  * @brief Sends this rank's outgoing boundary series once the chunk is solved.
  *
- * With lookahead the send is an MPI_Isend and this returns immediately, so the rank moves
- * on to the next chunk while the message is still in flight. The wait happens here on the
- * NEXT call, before the buffer is refilled -- one chunk of lookahead, which is what fills
- * the pipeline along the rank chain.
+ * With lookahead the send is an MPI_Isend into slot `chunk % lookahead`, and this returns
+ * immediately, so the rank moves on while the message is in flight. The wait happens on
+ * the call that next needs that slot, i.e. `lookahead` chunks later.
  *
  * Without lookahead it is a plain MPI_Send. That is correct but lockstep, and above Intel
  * MPI's eager threshold (~256 KB, reached by a 7-day chunk) MPI_Send blocks until the
@@ -87,11 +91,13 @@ double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps);
  * @param part This rank's partition, to find each link's local slice.
  * @param results This rank's solved series, in local index space.
  * @param n_steps Steps in this chunk.
+ * @param chunk Index of this chunk, which selects the send slot.
  */
 void SendBoundaries(BoundaryExchange& ex,
                     const Partition& part,
                     const std::vector<float>& results,
-                    size_t n_steps);
+                    size_t n_steps,
+                    size_t chunk);
 
 /**
  * @brief Waits for any outstanding non-blocking sends. Call once after the last chunk.
