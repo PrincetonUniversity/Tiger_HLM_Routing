@@ -21,6 +21,8 @@ struct ModelConfig {
     double dt;
     double rtol;
     double atol;
+    std::string traversal; // "level" for the level-synchronous path, "counter" for the
+                           // dependency-driven one. Defaults to "level".
        
     // Parameters
     std::string parameters_file;
@@ -59,9 +61,20 @@ struct ModelConfig {
     std::string snapshot_filepath; 
     int max_output; // 0 for no max output, 1 for max output
     std::string max_output_filepath;
-    bool snapshot_per_year = false; // if true, write only one snapshot at end of year instead of every chunk
-        bool use_task_scheduling = false; // if true, use OpenMP task depend() dataflow scheduling instead of per-level parallel_for
-        
+
+    // Distribution across MPI ranks.
+    // Empty is behaviour before partitioning: a single rank owning every link
+    std::string mpi_partition_file; // built by tools/partition.py
+    int mpi_lookahead_chunks; // 1: send non-blocking so a rank runs a chunk ahead of the
+                              // rank below it. 0: lockstep, for measuring what it buys.
+
+    // Profiling (all optional, defaults reproduce the previous behaviour exactly)
+    int profile_level_timing; // 0 for no per-level timing, 1 to write the per-level CSV
+    std::string profile_filepath; // path for the per-level CSV, only for flag 1
+    std::string omp_schedule; // "static", "dynamic" or "guided" for the link loop
+    int omp_chunk; // chunk size for the schedule above, 0 for the OpenMP default
+    bool snapshot_per_year = false; // write one snapshot at end of year instead of every chunk
+
 };
 
 /**
@@ -79,7 +92,6 @@ public:
     std::string getString(const std::string& key, const std::string& defaultValue = "");
     int getInt(const std::string& key, int defaultValue = 0);
     double getDouble(const std::string& key, double defaultValue = 0.0);
-    bool getBool(const std::string& key, bool defaultValue = false);
 
 private:
     // Member variables

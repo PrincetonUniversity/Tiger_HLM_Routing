@@ -9,4 +9,4 @@
  * @param setup The model setup containing configuration, node information, and other parameters.
  */
 
-void runRouting(const ModelSetup& setup);
+void runRouting(const ModelSetup& setup, int rank, int n_ranks);

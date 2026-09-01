@@ -1,6 +1,7 @@
 #include "omp_info.hpp"
 #include <iostream>
 #include <cstdlib>
+#include <string>
 #include <omp.h>  // Required here because omp_set_num_threads is used
 
 /**
@@ -22,4 +23,24 @@ void setupOpenMP() {
     }
 
     std::cout << "__________________________________________________ \n" << std::endl;
+}
+
+/**
+ * @brief Sets the schedule used by the link loop, which is declared schedule(runtime).
+ * Lets one binary compare static, dynamic and guided without a rebuild, so that
+ * intra-level load imbalance can be separated from barrier idle.
+ */
+void applyOmpSchedule(const std::string& kind, int chunk)
+{
+    omp_sched_t sched = omp_sched_static;
+    if (kind == "dynamic") {
+        sched = omp_sched_dynamic;
+    } else if (kind == "guided") {
+        sched = omp_sched_guided;
+    } else if (kind != "static") {
+        std::cerr << "Warning: unknown profiling.omp_schedule '" << kind
+                  << "'. Falling back to static." << std::endl;
+    }
+
+    omp_set_schedule(sched, chunk);
 }

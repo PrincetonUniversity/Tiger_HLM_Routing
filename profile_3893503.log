@@ -1,0 +1,3 @@
+Loading intel/2024.2
+  Loading requirement: intel-tbb/2021.13 intel-rt/2024.2
+/var/spool/slurmd/job3893503/slurm_script: line 21: advisor: command not found

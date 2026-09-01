@@ -1,7 +1,7 @@
 # ==== Compiler and Flags ====
-CXX := icpx
-CXXFLAGS := -O3 -g -ipo -fp-model fast=2 -qopenmp -fma \
-            -xSapphireRapids -qopt-prefetch \
+CXX := mpiicpx
+CXXFLAGS := -O3 -ipo -fp-model fast=2 -qopenmp -fma \
+            -xSapphireRapids -qopt-report-phase=vec -qopt-prefetch \
             -Rpass=loop-vectorize -Rpass=inline -DNDEBUG -std=c++17
 
 
@@ -13,13 +13,17 @@ SRC := src/main.cpp \
        src/build_info.cpp \
        src/omp_info.cpp \
        src/model_setup.cpp \
+       src/dependency_graph.cpp \
+       src/partition.cpp \
+       src/boundary_exchange.cpp \
        src/routing.cpp \
        src/end_info.cpp \
        src/I_O/node_info.cpp \
        src/I_O/output_series.cpp \
        src/I_O/inputs.cpp \
        src/I_O/config_loader.cpp \
-       src/utils/time.cpp
+       src/utils/time.cpp \
+       src/utils/level_timing.cpp
 
 # ==== Build and Binary Directories ====
 BUILD_DIR := build

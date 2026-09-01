@@ -1,0 +1,118 @@
+CONUS level analysis - generated Mon Aug 24 02:59:40 PM EDT 2026
+Source: /scratch/gpfs/GVILLARI/HLM/CONUS_V1_0_0/parameters
+
+
+==========================================
+CONUS East: CONUS_East_routing_params_huc4_pred.csv
+==========================================
+Total nodes: 10382122
+Distinct levels: 4653
+Max level: 4652
+Avg parallelism (nodes / distinct levels): 2231
+
+First 10 levels (headwaters and near-headwaters):
+5321479 0
+1078389 1
+ 598536 2
+ 401870 3
+ 296647 4
+ 231508 5
+ 187810 6
+ 156156 7
+ 132757 8
+ 114778 9
+
+Last 10 levels (near-outlet):
+      1 4643
+      1 4644
+      1 4645
+      1 4646
+      1 4647
+      1 4648
+      1 4649
+      1 4650
+      1 4651
+      1 4652
+
+Singleton levels (1 node only): 1193
+Levels with <112 nodes: 4044
+Levels with >=1000 nodes: 186
+Levels with >=10000 nodes: 49
+
+==========================================
+CONUS Central: CONUS_Central_routing_params_huc4_pred.csv
+==========================================
+Total nodes: 18578210
+Distinct levels: 16177
+Max level: 16176
+Avg parallelism (nodes / distinct levels): 1148
+
+First 10 levels (headwaters and near-headwaters):
+9487823 0
+1901435 1
+1060876 2
+ 716646 3
+ 530524 4
+ 415255 5
+ 337291 6
+ 280705 7
+ 238659 8
+ 206110 9
+
+Last 10 levels (near-outlet):
+      1 16167
+      1 16168
+      1 16169
+      1 16170
+      1 16171
+      1 16172
+      1 16173
+      1 16174
+      1 16175
+      1 16176
+
+Singleton levels (1 node only): 9231
+Levels with <112 nodes: 15297
+Levels with >=1000 nodes: 265
+Levels with >=10000 nodes: 70
+
+==========================================
+CONUS West: CONUS_West_routing_params_huc4_pred.csv
+==========================================
+Total nodes: 17071381
+Distinct levels: 8772
+Max level: 8771
+Avg parallelism (nodes / distinct levels): 1946
+
+First 10 levels (headwaters and near-headwaters):
+8713275 0
+1765739 1
+ 979596 2
+ 659870 3
+ 488753 4
+ 382763 5
+ 311243 6
+ 259844 7
+ 221232 8
+ 191164 9
+
+Last 10 levels (near-outlet):
+      1 8762
+      1 8763
+      1 8764
+      1 8765
+      1 8766
+      1 8767
+      1 8768
+      1 8769
+      1 8770
+      1 8771
+
+Singleton levels (1 node only): 88
+Levels with <112 nodes: 8003
+Levels with >=1000 nodes: 243
+Levels with >=10000 nodes: 66
+
+==========================================
+Done.
+==========================================

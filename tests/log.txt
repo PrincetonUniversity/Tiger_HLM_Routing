@@ -1,0 +1,673 @@
+0: ___________________BUILD INFO_____________________ 
+0: 
+0: Tiger HLM routing version 1.0.0
+0: Tiger HLM routing build date: Aug 28 2026 14:37:57
+0: Tiger HLM routing build by: am2192
+0: __________________________________________________ 
+0: 
+0: ___________________OpenMP INFO____________________ 
+0: 
+0: OMP_NUM_THREADS is set to 112! 
+0: 
+0: __________________________________________________ 
+0: 
+0: _________________MODEL SET UP_____________________ 
+0: 
+0: Loading user inputs from YAML file...completed!
+0: Loading network parameters...completed!
+0: Loading initial conditions...completed!
+0: Loading boundary condition...completed!
+0: Checking if reservoir routing is needed (placeholder)...completed!
+0: Loading runoff data chunk info...completed!
+0: Setting up output options...completed!
+0: __________________________________________________ 
+0: 
+0: _________________STARTING ROUTING_________________ 
+0: 
+0:   Partition: rank 0 of 1 owns 10382122 of 10382122 links (100%).
+0:   Traversal: counter (dependency-driven)
+0:   Dependency graph: 5321479 headwaters, 30238 outlets.
+0: Processing chunk/file 1 of 53:
+0:   Start time for this chunk: 2021-01-01_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210101_20210107.nc...completed!
+0:   Total read in time: 6.77986 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 53.2478 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.509 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.82818 seconds
+0: Processing chunk/file 2 of 53:
+0:   Start time for this chunk: 2021-01-08_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210108_20210114.nc...completed!
+0:   Total read in time: 7.74676 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.7e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 165.239 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 2.48097 seconds
+0: Processing chunk/file 3 of 53:
+0:   Start time for this chunk: 2021-01-15_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210115_20210121.nc...completed!
+0:   Total read in time: 7.59052 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.54e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.457 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 2.51009 seconds
+0: Processing chunk/file 4 of 53:
+0:   Start time for this chunk: 2021-01-22_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210122_20210128.nc...completed!
+0:   Total read in time: 7.21513 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 1.74e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.929 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 15.7573 seconds
+0: Processing chunk/file 5 of 53:
+0:   Start time for this chunk: 2021-01-29_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210129_20210204.nc...completed!
+0:   Total read in time: 8.01641 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.24e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.805 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.21059 seconds
+0: Processing chunk/file 6 of 53:
+0:   Start time for this chunk: 2021-02-05_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210205_20210211.nc...completed!
+0:   Total read in time: 7.47346 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 1.62e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.509 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 4.95654 seconds
+0: Processing chunk/file 7 of 53:
+0:   Start time for this chunk: 2021-02-12_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210212_20210218.nc...completed!
+0:   Total read in time: 7.1939 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.78e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 166.91 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.26017 seconds
+0: Processing chunk/file 8 of 53:
+0:   Start time for this chunk: 2021-02-19_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210219_20210225.nc...completed!
+0:   Total read in time: 7.18624 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 3.59e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.584 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.42329 seconds
+0: Processing chunk/file 9 of 53:
+0:   Start time for this chunk: 2021-02-26_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210226_20210304.nc...completed!
+0:   Total read in time: 7.24372 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 1.85e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.523 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.92926 seconds
+0: Processing chunk/file 10 of 53:
+0:   Start time for this chunk: 2021-03-05_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210305_20210311.nc...completed!
+0:   Total read in time: 7.17631 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.25e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 165.159 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.27326 seconds
+0: Processing chunk/file 11 of 53:
+0:   Start time for this chunk: 2021-03-12_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210312_20210318.nc...completed!
+0:   Total read in time: 7.13052 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 3.36e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.523 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.07211 seconds
+0: Processing chunk/file 12 of 53:
+0:   Start time for this chunk: 2021-03-19_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210319_20210325.nc...completed!
+0:   Total read in time: 7.12975 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.26e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.44 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.17734 seconds
+0: Processing chunk/file 13 of 53:
+0:   Start time for this chunk: 2021-03-26_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210326_20210401.nc...completed!
+0:   Total read in time: 7.13413 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.05e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.437 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.19189 seconds
+0: Processing chunk/file 14 of 53:
+0:   Start time for this chunk: 2021-04-02_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210402_20210408.nc...completed!
+0:   Total read in time: 7.07849 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 1.63e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.448 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.19807 seconds
+0: Processing chunk/file 15 of 53:
+0:   Start time for this chunk: 2021-04-09_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210409_20210415.nc...completed!
+0:   Total read in time: 7.17361 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 1.78e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.501 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.90202 seconds
+0: Processing chunk/file 16 of 53:
+0:   Start time for this chunk: 2021-04-16_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210416_20210422.nc...completed!
+0:   Total read in time: 7.20951 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 1.72e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.521 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 4.09425 seconds
+0: Processing chunk/file 17 of 53:
+0:   Start time for this chunk: 2021-04-23_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210423_20210429.nc...completed!
+0:   Total read in time: 7.25731 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 4.18e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.948 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.34487 seconds
+0: Processing chunk/file 18 of 53:
+0:   Start time for this chunk: 2021-04-30_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210430_20210506.nc...completed!
+0:   Total read in time: 7.14415 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.28e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.557 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.15716 seconds
+0: Processing chunk/file 19 of 53:
+0:   Start time for this chunk: 2021-05-07_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210507_20210513.nc...completed!
+0:   Total read in time: 7.04413 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.58e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.547 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.10815 seconds
+0: Processing chunk/file 20 of 53:
+0:   Start time for this chunk: 2021-05-14_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210514_20210520.nc...completed!
+0:   Total read in time: 7.0339 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.29e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.42 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.14008 seconds
+0: Processing chunk/file 21 of 53:
+0:   Start time for this chunk: 2021-05-21_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210521_20210527.nc...completed!
+0:   Total read in time: 6.99871 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 1.69e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.433 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.13036 seconds
+0: Processing chunk/file 22 of 53:
+0:   Start time for this chunk: 2021-05-28_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210528_20210603.nc...completed!
+0:   Total read in time: 6.99346 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 1.68e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 165.256 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 2.99377 seconds
+0: Processing chunk/file 23 of 53:
+0:   Start time for this chunk: 2021-06-04_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210604_20210610.nc...completed!
+0:   Total read in time: 6.99153 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.06e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.834 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.00308 seconds
+0: Processing chunk/file 24 of 53:
+0:   Start time for this chunk: 2021-06-11_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210611_20210617.nc...completed!
+0:   Total read in time: 6.99191 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.25e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.404 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.00704 seconds
+0: Processing chunk/file 25 of 53:
+0:   Start time for this chunk: 2021-06-18_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210618_20210624.nc...completed!
+0:   Total read in time: 7.04921 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.39e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.43 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.11041 seconds
+0: Processing chunk/file 26 of 53:
+0:   Start time for this chunk: 2021-06-25_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210625_20210701.nc...completed!
+0:   Total read in time: 7.0157 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.62e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.518 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.20065 seconds
+0: Processing chunk/file 27 of 53:
+0:   Start time for this chunk: 2021-07-02_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210702_20210708.nc...completed!
+0:   Total read in time: 6.99022 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.79e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.409 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.17468 seconds
+0: Processing chunk/file 28 of 53:
+0:   Start time for this chunk: 2021-07-09_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210709_20210715.nc...completed!
+0:   Total read in time: 6.96535 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 1.54e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.42 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.16435 seconds
+0: Processing chunk/file 29 of 53:
+0:   Start time for this chunk: 2021-07-16_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210716_20210722.nc...completed!
+0:   Total read in time: 6.87057 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.48e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.415 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.13846 seconds
+0: Processing chunk/file 30 of 53:
+0:   Start time for this chunk: 2021-07-23_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210723_20210729.nc...completed!
+0:   Total read in time: 6.86467 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 3.35e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.437 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.14125 seconds
+0: Processing chunk/file 31 of 53:
+0:   Start time for this chunk: 2021-07-30_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210730_20210805.nc...completed!
+0:   Total read in time: 6.83119 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.02e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.415 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 4.31882 seconds
+0: Processing chunk/file 32 of 53:
+0:   Start time for this chunk: 2021-08-06_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210806_20210812.nc...completed!
+0:   Total read in time: 7.11506 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.46e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.455 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.05081 seconds
+0: Processing chunk/file 33 of 53:
+0:   Start time for this chunk: 2021-08-13_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210813_20210819.nc...completed!
+0:   Total read in time: 7.04607 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.61e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.414 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.03783 seconds
+0: Processing chunk/file 34 of 53:
+0:   Start time for this chunk: 2021-08-20_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210820_20210826.nc...completed!
+0:   Total read in time: 7.01128 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.49e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.461 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.04267 seconds
+0: Processing chunk/file 35 of 53:
+0:   Start time for this chunk: 2021-08-27_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210827_20210902.nc...completed!
+0:   Total read in time: 6.98726 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.28e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.448 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.10861 seconds
+0: Processing chunk/file 36 of 53:
+0:   Start time for this chunk: 2021-09-03_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210903_20210909.nc...completed!
+0:   Total read in time: 6.98037 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.52e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.461 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.23929 seconds
+0: Processing chunk/file 37 of 53:
+0:   Start time for this chunk: 2021-09-10_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210910_20210916.nc...completed!
+0:   Total read in time: 6.99959 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.32e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.401 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.21847 seconds
+0: Processing chunk/file 38 of 53:
+0:   Start time for this chunk: 2021-09-17_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210917_20210923.nc...completed!
+0:   Total read in time: 6.96261 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.4e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.417 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.09815 seconds
+0: Processing chunk/file 39 of 53:
+0:   Start time for this chunk: 2021-09-24_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20210924_20210930.nc...completed!
+0:   Total read in time: 6.96232 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.3e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.384 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.27083 seconds
+0: Processing chunk/file 40 of 53:
+0:   Start time for this chunk: 2021-10-01_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20211001_20211007.nc...completed!
+0:   Total read in time: 7.00154 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.3e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.433 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.06345 seconds
+0: Processing chunk/file 41 of 53:
+0:   Start time for this chunk: 2021-10-08_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20211008_20211014.nc...completed!
+0:   Total read in time: 6.88338 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 1.64e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.456 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.04675 seconds
+0: Processing chunk/file 42 of 53:
+0:   Start time for this chunk: 2021-10-15_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20211015_20211021.nc...completed!
+0:   Total read in time: 7.00102 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.31e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.375 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.0305 seconds
+0: Processing chunk/file 43 of 53:
+0:   Start time for this chunk: 2021-10-22_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20211022_20211028.nc...completed!
+0:   Total read in time: 6.95221 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.24e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.382 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.03167 seconds
+0: Processing chunk/file 44 of 53:
+0:   Start time for this chunk: 2021-10-29_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20211029_20211104.nc...completed!
+0:   Total read in time: 6.88413 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 3.79e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.414 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.02341 seconds
+0: Processing chunk/file 45 of 53:
+0:   Start time for this chunk: 2021-11-05_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20211105_20211111.nc...completed!
+0:   Total read in time: 6.89766 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 4.94e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.398 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.03121 seconds
+0: Processing chunk/file 46 of 53:
+0:   Start time for this chunk: 2021-11-12_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20211112_20211118.nc...completed!
+0:   Total read in time: 6.92076 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 3.68e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.395 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 2.93082 seconds
+0: Processing chunk/file 47 of 53:
+0:   Start time for this chunk: 2021-11-19_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20211119_20211125.nc...completed!
+0:   Total read in time: 6.89547 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 3.72e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.436 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.17398 seconds
+0: Processing chunk/file 48 of 53:
+0:   Start time for this chunk: 2021-11-26_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20211126_20211202.nc...completed!
+0:   Total read in time: 7.75749 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.65e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.423 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 2.97016 seconds
+0: Processing chunk/file 49 of 53:
+0:   Start time for this chunk: 2021-12-03_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20211203_20211209.nc...completed!
+0:   Total read in time: 6.83624 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.74e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.397 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.05603 seconds
+0: Processing chunk/file 50 of 53:
+0:   Start time for this chunk: 2021-12-10_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20211210_20211216.nc...completed!
+0:   Total read in time: 6.85562 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 3.88e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.406 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.05776 seconds
+0: Processing chunk/file 51 of 53:
+0:   Start time for this chunk: 2021-12-17_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20211217_20211223.nc...completed!
+0:   Total read in time: 6.86215 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.68e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.399 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 3.05606 seconds
+0: Processing chunk/file 52 of 53:
+0:   Start time for this chunk: 2021-12-24_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20211224_20211230.nc...completed!
+0:   Total read in time: 6.87655 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 3.9e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 164.393 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 2.96592 seconds
+0: Processing chunk/file 53 of 53:
+0:   Start time for this chunk: 2021-12-31_00_00_00
+0:   Reading in runoff from netcdf file: /scratch/gpfs/GVILLARI/mw2479/routing_analysis/data/gardlens/GARDLENS_canesm5_r1i1p1f1/East/2021/runoff/runoff_20211231_20211231.nc...completed!
+0:   Total read in time: 3.65088 seconds
+0:   Allocating space for results...completed!
+0:   Total allocation time: 2.62e-07 seconds
+0:   Starting integration for each link...completed!
+0:   Total integration time: 23.6194 seconds
+0:   Writing final time step (snapshot) to netcdf...completed!
+0:   Writing maximum values to netcdf... completed!
+0: No output requested.
+0:   Total write time: 0.970391 seconds
+0: __________________________________________________ 
+0: 
+0: _________________END OF ROUTING__________________ 
+0: 
+0: Routing completed successfully!
+0: Thank you for using Tiger HLM routing!
+0: __________________________________________________ 
+0: 

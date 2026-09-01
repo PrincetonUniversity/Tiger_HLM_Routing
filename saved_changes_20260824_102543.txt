@@ -1,0 +1,269 @@
+Saved changes backup - Mon Aug 24 10:25:43 AM EDT 2026
+Branch: mb
+==========================================
+
+
+############################################
+FILE: Makefile
+############################################
+diff --git a/Makefile b/Makefile
+index 9833db6..0d50d6d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,7 +1,7 @@
+ # ==== Compiler and Flags ====
+ CXX := icpx
+-CXXFLAGS := -O3 -ipo -fp-model fast=2 -qopenmp -fma \
+-            -xSapphireRapids -qopt-report-phase=vec -qopt-prefetch \
++CXXFLAGS := -O3 -g -ipo -fp-model fast=2 -qopenmp -fma \
++            -xSapphireRapids -qopt-prefetch \
+             -Rpass=loop-vectorize -Rpass=inline -DNDEBUG -std=c++17
+ 
+ 
+
+
+############################################
+FILE: src/I_O/config_loader.cpp
+############################################
+diff --git a/src/I_O/config_loader.cpp b/src/I_O/config_loader.cpp
+index acba793..f785c68 100644
+--- a/src/I_O/config_loader.cpp
++++ b/src/I_O/config_loader.cpp
+@@ -275,6 +275,19 @@ double SimpleYamlParser::getDouble(const std::string& key, double defaultValue)
+     return defaultValue;
+ }
+ 
++bool SimpleYamlParser::getBool(const std::string& key, bool defaultValue) {
++    auto it = keyValueMap.find(key);
++    if (it == keyValueMap.end()) {
++        return defaultValue;
++    }
++    std::string val = it->second;
++    std::transform(val.begin(), val.end(), val.begin(),
++                   [](unsigned char c) { return std::tolower(c); });
++    if (val == "true" || val == "1" || val == "yes") return true;
++    if (val == "false" || val == "0" || val == "no") return false;
++    return defaultValue; // unrecognized value, fall back rather than guess
++}
++
+ 
+ // Implementation of ConfigLoader methods
+ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
+@@ -336,6 +349,7 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
+     config.snapshot_filepath = parser.getString("output.snapshot_filepath");
+     config.max_output = parser.getInt("output.max_output", 0); // Default to 0 if not specified
+     config.max_output_filepath = parser.getString("output.max_output_filepath");
++    config.snapshot_per_year = parser.getBool("output.snapshot_per_year", false); // Default false: preserves old per-chunk behavior for existing YAMLs
+ 
+     return config;
+ }
+\ No newline at end of file
+
+
+############################################
+FILE: src/I_O/config_loader.hpp
+############################################
+diff --git a/src/I_O/config_loader.hpp b/src/I_O/config_loader.hpp
+index a663ff3..22cd9c9 100644
+--- a/src/I_O/config_loader.hpp
++++ b/src/I_O/config_loader.hpp
+@@ -59,6 +59,7 @@ struct ModelConfig {
+     std::string snapshot_filepath; 
+     int max_output; // 0 for no max output, 1 for max output
+     std::string max_output_filepath;
++    bool snapshot_per_year = false; // if true, write only one snapshot at end of year instead of every chunk
+ 
+ };
+ 
+@@ -77,6 +78,7 @@ public:
+     std::string getString(const std::string& key, const std::string& defaultValue = "");
+     int getInt(const std::string& key, int defaultValue = 0);
+     double getDouble(const std::string& key, double defaultValue = 0.0);
++    bool getBool(const std::string& key, bool defaultValue = false);
+ 
+ private:
+     // Member variables
+
+
+############################################
+FILE: src/I_O/output_series.cpp
+############################################
+diff --git a/src/I_O/output_series.cpp b/src/I_O/output_series.cpp
+index 24e1d39..ea91f74 100644
+--- a/src/I_O/output_series.cpp
++++ b/src/I_O/output_series.cpp
+@@ -37,6 +37,20 @@ SaveInfo readSaveList(const std::string& filename) {
+     return save_info;
+ }
+ 
++// Convert YYYY-MM-DD_HH_MM_SS -> YYYY-MM-DD HH:MM:SS (CF-compliant)
++static std::string make_cf_time_string(const std::string& t) {
++    // Accepts "YYYY-MM-DD_HH_MM_SS" and returns "YYYY-MM-DD HH:MM:SS"
++    if (t.size() != 19) {
++        throw std::runtime_error("Invalid time string format: " + t);
++    }
++    std::string out = t;
++    out[10] = ' ';
++    out[13] = ':';
++    out[16] = ':';
++    return out;
++}
++
++
+ /**
+  * @brief Write a streamflow array to a NetCDF file with optional compression.
+  */
+@@ -76,8 +90,12 @@ void write_timeseries_netcdf(const std::string& filename,
+     // Add attributes
+     NC_CHECK(nc_put_att_text(ncid, sys_varid, "long_name", 36, "ID associated with each stream link"));
+     NC_CHECK(nc_put_att_text(ncid, time_varid, "long_name", 5, "Time"));
+-    std::string time_units = "minutes since " + time_string;
+-    NC_CHECK(nc_put_att_text(ncid, time_varid, "units", strlen(time_units.c_str()), time_units.c_str()));
++    // std::string time_units = "minutes since " + time_string;
++    // NC_CHECK(nc_put_att_text(ncid, time_varid, "units", strlen(time_units.c_str()), time_units.c_str()));// issue
++    std::string cf_time = make_cf_time_string(time_string);
++    std::string time_units = "minutes since " + cf_time;
++    NC_CHECK(nc_put_att_text(ncid, time_varid, "units", time_units.size(), time_units.c_str())); 
++    
+     NC_CHECK(nc_put_att_text(ncid, time_varid, "calendar", strlen(calendar_str.c_str()), calendar_str.c_str()));
+     NC_CHECK(nc_put_att_text(ncid, results_varid, "long_name", 10, "Discharge"));
+     NC_CHECK(nc_put_att_text(ncid, results_varid, "units", 6, "m^3/s"));
+
+
+############################################
+FILE: src/model_setup.cpp
+############################################
+diff --git a/src/model_setup.cpp b/src/model_setup.cpp
+index b68a087..8a30453 100644
+--- a/src/model_setup.cpp
++++ b/src/model_setup.cpp
+@@ -26,6 +26,7 @@ ModelSetup setupModel(const char* config_path) {
+     std::cout << "Loading user inputs from YAML file...";
+     setup.config = ConfigLoader::loadConfig(config_path);
+     std::cout << "completed!" << std::endl;
++    std::cout << "  snapshot_per_year: " << (setup.config.snapshot_per_year ? "true" : "false") << std::endl;
+ 
+     // Read node levels from CSV file
+     std::cout << "Loading network parameters...";
+
+
+############################################
+FILE: src/routing.cpp
+############################################
+diff --git a/src/routing.cpp b/src/routing.cpp
+index 835dcc5..30f25cd 100644
+--- a/src/routing.cpp
++++ b/src/routing.cpp
+@@ -32,26 +32,40 @@ void writeOutput(const ModelSetup& setup,
+                  size_t n_steps,
+                  const std::vector<int>& sim_times,
+                  std::vector<float>& q_final,
+-                 const std::string& time_string) 
++                 const std::string& time_string,
++                 bool is_last_chunk) 
+ {   
+-    //------------------------------- SNAPSHOT OUTPUT -----------------------------------------------------------------
+-    std::cout << "  Writing final time step (snapshot) to netcdf...";
+-    std::vector<int> stream_ids(setup.n_links);
++        //------------------------------- SNAPSHOT OUTPUT -----------------------------------------------------------------
++    // q_final MUST be computed every chunk — it's the state handoff to the next chunk.
+     size_t last_step = n_steps - 1;
++    #pragma omp parallel for
+     for (size_t i_link = 0; i_link < setup.n_links; ++i_link) {
+         q_final[i_link] = results[i_link * n_steps + last_step];
++    }
++
++    // stream_ids is shared by both the snapshot and max_output blocks below,
++    // so it's computed once here regardless of which flags are set.
++    std::vector<int> stream_ids(setup.n_links);
++    for (size_t i_link = 0; i_link < setup.n_links; ++i_link) {
+         stream_ids[i_link] = setup.node_map.at(i_link).stream_id;
+     }
+-    std::string snapshot_filename = setup.config.snapshot_filepath + "_" + time_string + ".nc";
+-    write_snapshot_netcdf(snapshot_filename, q_final.data(), stream_ids.data(), setup.n_links);
+-    std::cout << "completed!" << std::endl;
++
++    //------------------------------- SNAPSHOT OUTPUT -----------------------------------------------------------------
++    if (!setup.config.snapshot_per_year || is_last_chunk) {
++        std::cout << "  Writing final time step (snapshot) to netcdf ("
++                  << (setup.config.snapshot_per_year ? "per-year" : "per-chunk")
++                  << ")...";
++        std::string snapshot_filename = setup.config.snapshot_filepath + "_" + time_string + ".nc";
++        write_snapshot_netcdf(snapshot_filename, q_final.data(), stream_ids.data(), setup.n_links);
++        std::cout << "completed!" << std::endl;
++    }
+ 
+     // --------------------------------- MAXIMUM OUTPUT -----------------------------------------------------------
+-    if( setup.config.max_output == 1) {
++    // Deliberately NOT gated by snapshot_per_year — writes every chunk regardless,
++    // since it's a running max, independent of the snapshot checkpoint cadence.
++    if (setup.config.max_output == 1) {
+         std::cout << "  Writing maximum values to netcdf...";
+-        // Find maximum values for each link
+         std::vector<float> max_results(setup.n_links, 0.0f);
+-        // Parallelize over all links
+         #pragma omp parallel for
+         for (size_t i_link = 0; i_link < setup.n_links; ++i_link) {
+             float local_max = 0.0f;
+@@ -68,7 +82,6 @@ void writeOutput(const ModelSetup& setup,
+         std::cout << " completed!" << std::endl;
+     }
+ 
+-
+     // --------------------------------- Time series output -----------------------------------------------------------
+     if (setup.config.output_flag == 0) {
+         std::cout << "No output requested." << std::endl;
+@@ -161,13 +174,17 @@ void IntegrateLinksAtLevel(const ModelSetup& setup,
+     double end_time   = (n_steps-1) * setup.config.dt;         // total time in minutes
+     
+     // Solve ODE for each link at this level
+-    #pragma omp parallel for schedule(static)
++    #pragma omp parallel for schedule(dynamic)
+     for (size_t i = 0; i < nodes_at_level.size(); ++i) {
+         size_t link_index = nodes_at_level[i];
+         const NodeInfo& node = setup.node_map.at(link_index);  // Safe to access from multiple threads
+ 
+-        // Initialize the inflow series (y_p_series) for this link. This will be used to store inflow from parent nodes or boundary conditions
+-        std::vector<float> y_p_series(n_steps, 0.0);
++        // // Initialize the inflow series (y_p_series) for this link. This will be used to store inflow from parent nodes or boundary conditions
++        // std::vector<float> y_p_series(n_steps, 0.0);
++        // Reused per-thread buffer, persists across calls on the same OS
++        // thread, avoiding a fresh heap allocation per node/chunk.
++        thread_local std::vector<float> y_p_series;
++        y_p_series.assign(n_steps, 0.0f);
+         size_t y_p_resolution = setup.config.dt; // Resolution in minutes for y_p_series, default to dt unless boundary conditions are used
+ 
+         //Check for BC
+@@ -332,10 +349,21 @@ void ProcessChunk(const ModelSetup& setup,
+     std::cout << "  Starting integration for each link..."  << std::flush;
+     auto solve_start = std::chrono::high_resolution_clock::now();
+     // Loop through each level and process nodes
++    // for (const auto& [level, nodes_at_level] : setup.level_groups) {
++    //     IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final);
++    // }
+     for (const auto& [level, nodes_at_level] : setup.level_groups) {
++        double level_start = omp_get_wtime();
+         IntegrateLinksAtLevel(setup, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final);
++        double level_end = omp_get_wtime();
++        std::cout << "    [LEVEL] chunk=" << tc
++                   << " level=" << level
++                   << " nodes=" << nodes_at_level.size()
++                   << " time=" << (level_end - level_start) << "s"
++                   << std::endl;
+     }
+     std::cout << "completed!" << std::endl;
++
+     auto solve_end = std::chrono::high_resolution_clock::now();
+     std::chrono::duration<double> solve_elapsed = solve_end - solve_start ;
+     std::cout << "  Total integration time: " << solve_elapsed.count() << " seconds" << std::endl;
+@@ -344,8 +372,9 @@ void ProcessChunk(const ModelSetup& setup,
+     total_time_steps += t_final; //time in minutes for this chunk
+ 
+     // -----------OUTPUT --------------------------------------------
++    bool is_last_chunk = (tc + 1 == static_cast<size_t>(setup.runoff_info.nchunks));
+     auto write_start = std::chrono::high_resolution_clock::now();
+-    writeOutput(setup, results, n_steps, sim_times, q_final, time_string);
++    writeOutput(setup, results, n_steps, sim_times, q_final, time_string, is_last_chunk);
+     auto write_end = std::chrono::high_resolution_clock::now();
+     std::chrono::duration<double> write_elapsed = write_end - write_start;
+     std::cout << "  Total write time: " << write_elapsed.count() << " seconds" << std::endl;
