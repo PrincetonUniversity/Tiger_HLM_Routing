@@ -457,7 +457,7 @@ void ProcessChunk(const ModelSetup& setup,
                   size_t tc,
                   size_t& total_time_steps,
                   std::vector<float>& q_final,
-                  size_t& startIndex,
+                  size_t start_index,
                   std::vector<float>& results,
                   const DependencyGraph& graph,
                   std::vector<std::atomic<int>>& pending,
@@ -465,9 +465,8 @@ void ProcessChunk(const ModelSetup& setup,
 {
     std::cout << "Processing chunk/file " << tc + 1 << " of " << setup.runoff_info.nchunks << ":" << std::endl;
 
-    // Compute the start index for this chunk if files change
-    if (tc > 0 && setup.runoff_info.filenames[tc] != setup.runoff_info.filenames[tc - 1]) startIndex = 0;
-    
+    // Where this chunk starts inside its file is precomputed in runRouting.
+
     //Compute starttime for this chunk
     std::string time_string = addTimeDelta(setup.config.start_date, setup.config.calendar, total_time_steps); //time string to store the start time for this chunk
     std::cout << "  Start time for this chunk: " << time_string << std::endl;
@@ -478,15 +477,12 @@ void ProcessChunk(const ModelSetup& setup,
     RunoffData runoff = readTotalRunoff(setup.runoff_info.filenames[tc], 
                                         setup.config.runoff_varname, 
                                         setup.config.runoff_id_varname,
-                                        startIndex,
+                                        start_index,
                                         setup.config.chunk_size);
     auto read_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> read_elapsed = read_end - read_start;
     std::cout << "completed!" << std::endl;
     std::cout << "  Total read in time: " << read_elapsed.count() << " seconds" << std::endl;
-
-    //Update start index for the next chunk
-    startIndex += setup.config.chunk_size;
 
     // -------------------- TIME SERIES SETUP --------------------------------------  
     // User defined parameters for simulation time (user input)
@@ -612,11 +608,20 @@ void runRouting(const ModelSetup& setup, int rank, int n_ranks){
     std::vector<float> results;          // declare the vector
     results.reserve(max_size);           // reserve memory upfront
 
+    // Where each chunk starts inside its file. A running counter answers "where does
+    // THIS chunk start" but cannot answer it for any other chunk, which is what reading
+    // ahead needs; the offsets depend only on the chunk index, so compute them once.
+    std::vector<size_t> chunk_start(setup.runoff_info.nchunks, 0);
+    for (int tc = 1; tc < setup.runoff_info.nchunks; ++tc) {
+        const bool same_file =
+            setup.runoff_info.filenames[tc] == setup.runoff_info.filenames[tc - 1];
+        chunk_start[tc] = same_file ? chunk_start[tc - 1] + setup.config.chunk_size : 0;
+    }
+
     // process chunks
     size_t total_time_steps = 0; // keep tract of total simulation time
-    size_t startIndex = 0; // start index for the first chunk
     for(int tc = 0; tc < setup.runoff_info.nchunks; ++tc){
-        ProcessChunk(setup, part, ex, tc, total_time_steps, q_final, startIndex, results, graph, pending, profiler);
+        ProcessChunk(setup, part, ex, tc, total_time_steps, q_final, chunk_start[tc], results, graph, pending, profiler);
     }
     FinishBoundaries(ex);   // no message may still be in flight at MPI_Finalize
     std::cout << "__________________________________________________ \n" << std::endl;
