@@ -2,8 +2,10 @@
 
 // C++ standard libraries
 #include <atomic>
+#include <future>
 #include <iostream>
 #include <vector>
+#include <utility>
 #include <boost/numeric/odeint.hpp>
 using namespace boost::numeric::odeint;
 #include <omp.h>
@@ -451,13 +453,53 @@ void IntegrateLinksByDependency(const ModelSetup& setup,
  * @param startIndex The start index for the current chunk.
  */
 
+/**
+ * @brief Reads the next chunk's runoff on a worker thread while this one is solved.
+ */
+class RunoffPrefetcher {
+public:
+    explicit RunoffPrefetcher(bool enabled) : enabled_(enabled) {}
+
+    /// Begin reading `tc` in the background. No-op when disabled.
+    template <typename ReadFn>
+    void start(int tc, ReadFn read) {
+        if (!enabled_) return;
+        pending_ = std::async(std::launch::async, [read, tc] { return read(tc); });
+        pending_tc_ = tc;
+    }
+
+    /// The runoff for `tc`, and the seconds the solve had to wait for it.
+    template <typename ReadFn>
+    std::pair<RunoffData, double> take(int tc, ReadFn read) {
+        const auto t0 = std::chrono::high_resolution_clock::now();
+        RunoffData data = (enabled_ && pending_.valid() && pending_tc_ == tc)
+                        ? pending_.get() : read(tc);
+        const std::chrono::duration<double> waited =
+            std::chrono::high_resolution_clock::now() - t0;
+        return {std::move(data), waited.count()};
+    }
+
+    /// Block until no read is in flight, so netCDF has a single user again.
+    void wait_idle() { if (pending_.valid()) pending_.wait(); }
+
+    /// Drop any read started for a chunk that will never be processed.
+    void stop() { if (pending_.valid()) pending_.get(); }
+
+private:
+    bool enabled_;
+    int pending_tc_ = -1;
+    std::future<RunoffData> pending_;
+};
+
 void ProcessChunk(const ModelSetup& setup,
                   const Partition& part,
                   BoundaryExchange& ex,
                   size_t tc,
                   size_t& total_time_steps,
                   std::vector<float>& q_final,
-                  size_t start_index,
+                  RunoffData& runoff,
+                  double read_seconds,
+                  RunoffPrefetcher& prefetch,
                   std::vector<float>& results,
                   const DependencyGraph& graph,
                   std::vector<std::atomic<int>>& pending,
@@ -465,24 +507,17 @@ void ProcessChunk(const ModelSetup& setup,
 {
     std::cout << "Processing chunk/file " << tc + 1 << " of " << setup.runoff_info.nchunks << ":" << std::endl;
 
-    // Where this chunk starts inside its file is precomputed in runRouting.
+    // The start index within the file is precomputed in runRouting, because the prefetch
+    // needs the NEXT chunk's offset while this one is still being solved.
 
     //Compute starttime for this chunk
     std::string time_string = addTimeDelta(setup.config.start_date, setup.config.calendar, total_time_steps); //time string to store the start time for this chunk
     std::cout << "  Start time for this chunk: " << time_string << std::endl;
 
     // ----------------- RUNOFF DATA --------------------------------------
-    std::cout << "  Reading in runoff from netcdf file: " << setup.runoff_info.filenames[tc] << "...";
-    auto read_start = std::chrono::high_resolution_clock::now();
-    RunoffData runoff = readTotalRunoff(setup.runoff_info.filenames[tc], 
-                                        setup.config.runoff_varname, 
-                                        setup.config.runoff_id_varname,
-                                        start_index,
-                                        setup.config.chunk_size);
-    auto read_end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> read_elapsed = read_end - read_start;
-    std::cout << "completed!" << std::endl;
-    std::cout << "  Total read in time: " << read_elapsed.count() << " seconds" << std::endl;
+    std::cout << "  Runoff from netcdf file: " << setup.runoff_info.filenames[tc] << std::endl;
+    // With prefetching this is the WAIT for the read, not the read itself.
+    std::cout << "  Total read in time: " << read_seconds << " seconds" << std::endl;
 
     // -------------------- TIME SERIES SETUP --------------------------------------  
     // User defined parameters for simulation time (user input)
@@ -540,6 +575,9 @@ void ProcessChunk(const ModelSetup& setup,
     total_time_steps += t_final; //time in minutes for this chunk
 
     // -----------OUTPUT --------------------------------------------
+    // netCDF is not thread safe here, so no read may be in flight when the writer
+    // opens a file.
+    prefetch.wait_idle();
     auto write_start = std::chrono::high_resolution_clock::now();
     writeOutput(setup, part, results, n_steps, sim_times, q_final, time_string);
     auto write_end = std::chrono::high_resolution_clock::now();
@@ -608,9 +646,9 @@ void runRouting(const ModelSetup& setup, int rank, int n_ranks){
     std::vector<float> results;          // declare the vector
     results.reserve(max_size);           // reserve memory upfront
 
-    // Where each chunk starts inside its file. A running counter answers "where does
-    // THIS chunk start" but cannot answer it for any other chunk, which is what reading
-    // ahead needs; the offsets depend only on the chunk index, so compute them once.
+    // Where each chunk starts inside its file. Precomputed rather than carried as a
+    // running counter, because the prefetch needs chunk t+1's offset while chunk t is
+    // still being solved, and a mutable counter cannot answer that.
     std::vector<size_t> chunk_start(setup.runoff_info.nchunks, 0);
     for (int tc = 1; tc < setup.runoff_info.nchunks; ++tc) {
         const bool same_file =
@@ -618,11 +656,27 @@ void runRouting(const ModelSetup& setup, int rank, int n_ranks){
         chunk_start[tc] = same_file ? chunk_start[tc - 1] + setup.config.chunk_size : 0;
     }
 
+    auto read_chunk = [&setup, &chunk_start](int tc) {
+        return readTotalRunoff(setup.runoff_info.filenames[tc],
+                               setup.config.runoff_varname,
+                               setup.config.runoff_id_varname,
+                               chunk_start[tc],
+                               setup.config.chunk_size);
+    };
+
     // process chunks
     size_t total_time_steps = 0; // keep tract of total simulation time
+    RunoffPrefetcher prefetch(setup.config.prefetch_runoff != 0);
     for(int tc = 0; tc < setup.runoff_info.nchunks; ++tc){
-        ProcessChunk(setup, part, ex, tc, total_time_steps, q_final, chunk_start[tc], results, graph, pending, profiler);
+        // Blocks only if the read has not finished; with prefetching on it usually has,
+        // because it ran during the previous chunk's solve.
+        auto [runoff, waited] = prefetch.take(tc, read_chunk);
+        // Start the next read now, so it overlaps this chunk's integration.
+        if (tc + 1 < setup.runoff_info.nchunks) prefetch.start(tc + 1, read_chunk);
+        ProcessChunk(setup, part, ex, tc, total_time_steps, q_final, runoff, waited,
+                     prefetch, results, graph, pending, profiler);
     }
+    prefetch.stop();
     FinishBoundaries(ex);   // no message may still be in flight at MPI_Finalize
     std::cout << "__________________________________________________ \n" << std::endl;
 

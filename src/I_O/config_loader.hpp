@@ -68,6 +68,11 @@ struct ModelConfig {
     int mpi_lookahead_chunks; // chunks a rank may run ahead of the rank below it: N send
                               // slots per peer. 0 sends blocking, for measuring the cost.
 
+    // Read the next chunk's runoff while the current one is being solved. 0 to disable.
+    // The reader runs on its own thread and netCDF here is NOT thread safe
+    // (`Threadsafety: no`), so nothing else may touch netCDF while it runs.
+    int prefetch_runoff;
+
     // Profiling (all optional, defaults reproduce the previous behaviour exactly)
     int profile_level_timing; // 0 for no per-level timing, 1 to write the per-level CSV
     std::string profile_filepath; // path for the per-level CSV, only for flag 1

@@ -357,6 +357,10 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
         config.mpi_lookahead_chunks = 1;
     }
 
+    // On by default: the read is small beside the solve it overlaps with, so it hides
+    // almost entirely, and overlapping cannot change results.
+    config.prefetch_runoff = parser.getInt("solver.prefetch_runoff", 1);
+
     // Load profiling options. All default to the previous behaviour, so configs written
     // before these keys existed run unchanged.
     config.profile_level_timing = parser.getInt("profiling.level_timing", 0);
