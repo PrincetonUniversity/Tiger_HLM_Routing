@@ -634,11 +634,21 @@ void runRouting(const ModelSetup& setup, int rank, int n_ranks){
         pending = std::vector<std::atomic<int>>(setup.n_links);
     }
     BoundaryExchange ex = BuildBoundaryExchange(part, graph);
-    ex.lookahead = setup.config.mpi_lookahead_chunks;
+    int depth = 0;
+    const char* how;
+    if (setup.config.mpi_lookahead_chunks < 0) {
+        depth = RankGraphDepth(part, graph);
+        ex.lookahead = (depth + 1) / 2;   // ceil(depth/2), matched measured optima
+        how = "auto";
+    } else {
+        ex.lookahead = setup.config.mpi_lookahead_chunks;
+        how = ex.lookahead ? "set" : "lockstep";
+    }
     if (part.distributed()) {
         std::cout << "  Pipelining: lookahead_chunks = " << ex.lookahead
-                  << (ex.lookahead ? " (a rank runs a chunk ahead)" : " (lockstep)")
-                  << std::endl;
+                  << " (" << how;
+        if (depth) std::cout << ", rank-graph depth " << depth;
+        std::cout << ")" << std::endl;
     }
 
     //reserving max size up front

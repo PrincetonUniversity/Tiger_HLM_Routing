@@ -65,8 +65,9 @@ struct ModelConfig {
     // Distribution across MPI ranks.
     // Empty is behaviour before partitioning: a single rank owning every link
     std::string mpi_partition_file; // built by tools/partition.py
-    int mpi_lookahead_chunks; // chunks a rank may run ahead of the rank below it: N send
-                              // slots per peer. 0 sends blocking, for measuring the cost.
+    // Send slots per peer, i.e. chunks a rank may run ahead of the rank below it.
+    // -1 (default) picks ceil(depth/2) from the rank graph; 0 is blocking.
+    int mpi_lookahead_chunks;
 
     // Read the next chunk's runoff while the current one is being solved. 0 to disable.
     // The reader runs on its own thread and netCDF here is NOT thread safe

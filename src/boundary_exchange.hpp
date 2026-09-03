@@ -52,6 +52,14 @@ struct BoundaryExchange {
 };
 
 /**
+ * @brief Longest chain of ranks a chunk must cross in series.
+ *
+ * Sets per-chunk latency; the useful lookahead is roughly half this.
+ * Local: no MPI. Returns 1 for a single-rank partition.
+ */
+int RankGraphDepth(const Partition& part, const DependencyGraph& graph);
+
+/**
  * @brief Works out which links cross which rank boundary.
  *
  * Derived from the partition and the graph, both already built. Nothing is read from disk

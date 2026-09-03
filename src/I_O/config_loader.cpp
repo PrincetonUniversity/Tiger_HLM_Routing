@@ -347,14 +347,15 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
 
     // Absent, the run owns the whole network on one rank
     config.mpi_partition_file = parser.getString("mpi.partition_file", "");
-    config.mpi_lookahead_chunks = parser.getInt("mpi.lookahead_chunks", 1);
+    // -1 asks routing to derive it from the rank graph; see the field's declaration.
+    config.mpi_lookahead_chunks = parser.getInt("mpi.lookahead_chunks", -1);
     // Only catches typos: the useful value tracks the rank graph's depth, far below this
     constexpr int MAX_LOOKAHEAD_CHUNKS = 64;
-    if (config.mpi_lookahead_chunks < 0 ||
+    if (config.mpi_lookahead_chunks < -1 ||
         config.mpi_lookahead_chunks > MAX_LOOKAHEAD_CHUNKS) {
-        std::cerr << "Warning: mpi.lookahead_chunks must be 0.." << MAX_LOOKAHEAD_CHUNKS
-                  << ", got " << config.mpi_lookahead_chunks << ". Using 1." << std::endl;
-        config.mpi_lookahead_chunks = 1;
+        std::cerr << "Warning: mpi.lookahead_chunks must be -1.." << MAX_LOOKAHEAD_CHUNKS
+                  << ", got " << config.mpi_lookahead_chunks << ". Using -1 (auto)." << std::endl;
+        config.mpi_lookahead_chunks = -1;
     }
 
     // On by default: the read is small beside the solve it overlaps with, so it hides

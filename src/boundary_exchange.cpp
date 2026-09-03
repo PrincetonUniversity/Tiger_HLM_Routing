@@ -79,6 +79,41 @@ BoundaryExchange BuildBoundaryExchange(const Partition& part, const DependencyGr
     return ex;
 }
 
+int RankGraphDepth(const Partition& part, const DependencyGraph& graph)
+{
+    if (!part.distributed()) return 1;
+
+    // Collect distinct rank pairs. Repeats do not deepen the chain and would grow the
+    // next pass quadratically.
+    std::vector<std::vector<int>> succ(part.n_ranks);
+    {
+        std::vector<std::vector<bool>> seen(part.n_ranks, std::vector<bool>(part.n_ranks, false));
+        for (size_t i = 0; i < part.rank_of.size(); ++i) {
+            const size_t child = graph.child[i];
+            if (child == DependencyGraph::NO_CHILD) continue;
+            const int u = part.rank_of[i];
+            const int v = part.rank_of[child];
+            if (u == v || seen[u][v]) continue;
+            seen[u][v] = true;
+            succ[u].push_back(v);
+        }
+    }
+
+    // Ranks are topological (partition.py guarantees it, BuildBoundaryExchange checks),
+    // so one forward sweep suffices.
+    std::vector<int> longest(part.n_ranks, 1);
+    int best = 1;
+    for (int u = 0; u < part.n_ranks; ++u) {
+        for (int v : succ[u]) {
+            if (longest[u] + 1 > longest[v]) {
+                longest[v] = longest[u] + 1;
+                if (longest[v] > best) best = longest[v];
+            }
+        }
+    }
+    return best;
+}
+
 // Returns the seconds spent blocked
 double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps)
 {
