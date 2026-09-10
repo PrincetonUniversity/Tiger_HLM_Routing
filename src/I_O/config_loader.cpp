@@ -293,7 +293,15 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
     config.dt = parser.getDouble("solver.dt");
     config.rtol = parser.getDouble("solver.rtol");
     config.atol = parser.getDouble("solver.atol");
-    
+    // Which traversal solves the network. Absent, it is the level-synchronous path, so
+    // configs written before this key existed run exactly as they did.
+    config.traversal = parser.getString("solver.traversal", "level");
+    if (config.traversal != "level" && config.traversal != "counter") {
+        std::cerr << "Warning: unknown solver.traversal '" << config.traversal
+                  << "'. Expected 'level' or 'counter'. Falling back to 'level'." << std::endl;
+        config.traversal = "level";
+    }
+
     // Load parameters
     config.parameters_file = parser.getString("parameters.filename");
 
@@ -336,6 +344,35 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
     config.snapshot_filepath = parser.getString("output.snapshot_filepath");
     config.max_output = parser.getInt("output.max_output", 0); // Default to 0 if not specified
     config.max_output_filepath = parser.getString("output.max_output_filepath");
+
+    // Absent, the run owns the whole network on one rank
+    config.mpi_partition_file = parser.getString("mpi.partition_file", "");
+    // -1 asks routing to derive it from the rank graph; see the field's declaration.
+    config.mpi_lookahead_chunks = parser.getInt("mpi.lookahead_chunks", -1);
+    // Only catches typos: the useful value tracks the rank graph's depth, far below this
+    constexpr int MAX_LOOKAHEAD_CHUNKS = 64;
+    if (config.mpi_lookahead_chunks < -1 ||
+        config.mpi_lookahead_chunks > MAX_LOOKAHEAD_CHUNKS) {
+        std::cerr << "Warning: mpi.lookahead_chunks must be -1.." << MAX_LOOKAHEAD_CHUNKS
+                  << ", got " << config.mpi_lookahead_chunks << ". Using -1 (auto)." << std::endl;
+        config.mpi_lookahead_chunks = -1;
+    }
+
+    // On by default: the read is small beside the solve it overlaps with, so it hides
+    // almost entirely, and overlapping cannot change results.
+    config.prefetch_runoff = parser.getInt("solver.prefetch_runoff", 1);
+
+    // Load profiling options. All default to the previous behaviour, so configs written
+    // before these keys existed run unchanged.
+    config.profile_level_timing = parser.getInt("profiling.level_timing", 0);
+    config.profile_filepath = parser.getString("profiling.filepath", "");
+    config.omp_schedule = parser.getString("profiling.omp_schedule", "static");
+    config.omp_chunk = parser.getInt("profiling.omp_chunk", 0);
+    if (config.profile_level_timing == 1 && config.profile_filepath.empty()) {
+        std::cerr << "Warning: profiling.level_timing is 1 but profiling.filepath is empty. "
+                  << "Disabling per-level timing." << std::endl;
+        config.profile_level_timing = 0;
+    }
 
     return config;
 }

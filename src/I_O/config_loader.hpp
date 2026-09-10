@@ -21,6 +21,8 @@ struct ModelConfig {
     double dt;
     double rtol;
     double atol;
+    std::string traversal; // "level" for the level-synchronous path, "counter" for the
+                           // dependency-driven one. Defaults to "level".
        
     // Parameters
     std::string parameters_file;
@@ -59,6 +61,24 @@ struct ModelConfig {
     std::string snapshot_filepath; 
     int max_output; // 0 for no max output, 1 for max output
     std::string max_output_filepath;
+
+    // Distribution across MPI ranks.
+    // Empty is behaviour before partitioning: a single rank owning every link
+    std::string mpi_partition_file; // built by tools/partition.py
+    // Send slots per peer, i.e. chunks a rank may run ahead of the rank below it.
+    // -1 (default) picks ceil(depth/2) from the rank graph; 0 is blocking.
+    int mpi_lookahead_chunks;
+
+    // Read the next chunk's runoff while the current one is being solved. 0 to disable.
+    // The reader runs on its own thread and netCDF here is NOT thread safe
+    // (`Threadsafety: no`), so nothing else may touch netCDF while it runs.
+    int prefetch_runoff;
+
+    // Profiling (all optional, defaults reproduce the previous behaviour exactly)
+    int profile_level_timing; // 0 for no per-level timing, 1 to write the per-level CSV
+    std::string profile_filepath; // path for the per-level CSV, only for flag 1
+    std::string omp_schedule; // "static", "dynamic" or "guided" for the link loop
+    int omp_chunk; // chunk size for the schedule above, 0 for the OpenMP default
 
 };
 
