@@ -5,7 +5,7 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.16696727.svg)](https://doi.org/10.5281/zenodo.16696727)
 
 
-Tiger-HLM Routing software for converting hillslope generative runoff to streamflow with nonlinear routing equation. The complementary GPU based runoff generation software can be [here](https://github.com/PrincetonUniversity/Tiger_HLM_GPU). This software can be used as a stand alone as well. 
+Tiger-HLM Routing software for converting hillslope generative runoff to streamflow with nonlinear routing equation. This module is written in standard C++17 with OpenMP and does not require CUDA or GPU hardware. Any modern compiler works (GCC, Clang or Intel icpx), and the only external dependencies are Boost headers and NetCDF. The complementary GPU based runoff generation software is available at [Tiger-HLM GPU](https://github.com/PrincetonUniversity/Tiger_HLM_GPU). This software can be used as a stand alone as well. 
 
 
 Please read [our wiki page](https://github.com/PrincetonUniversity/Tiger_HLM_Routing/wiki) to get started.
