@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <map>
+#include <climits>
 
 #include <mpi.h>
 
@@ -83,8 +84,20 @@ void ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps)
     ex.arrived.clear();
     for (auto& peer : ex.recv_from) {
         peer.buffer.resize(peer.links.size() * n_steps);
-        MPI_Recv(peer.buffer.data(), static_cast<int>(peer.buffer.size()), MPI_FLOAT,
-                 peer.rank, BOUNDARY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        // Large messages exceed int max — send in chunks.
+        {
+            size_t total = peer.buffer.size();
+            size_t offset = 0;
+            int tag = BOUNDARY_TAG;
+            while (offset < total) {
+                size_t chunk = std::min(total - offset, (size_t)INT_MAX);
+                MPI_Recv(peer.buffer.data() + offset,
+                         static_cast<int>(chunk), MPI_FLOAT,
+                         peer.rank, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                offset += chunk;
+                ++tag;
+            }
+        }
         // Both sides pack in ascending global link index, so position determines identity.
         for (size_t k = 0; k < peer.links.size(); ++k) {
             ex.arrived[peer.links[k]] = peer.buffer.data() + k * n_steps;
@@ -116,11 +129,37 @@ void SendBoundaries(BoundaryExchange& ex,
                       peer.buffer.begin() + static_cast<std::ptrdiff_t>(k * n_steps));
         }
         if (ex.lookahead > 0) {
-            MPI_Isend(peer.buffer.data(), static_cast<int>(peer.buffer.size()), MPI_FLOAT,
-                      peer.rank, BOUNDARY_TAG, MPI_COMM_WORLD, &peer.request);
+            if (peer.buffer.size() > (size_t)INT_MAX) {
+                // Too large for a single non-blocking send; use blocking chunked.
+                size_t total = peer.buffer.size();
+                size_t offset = 0;
+                int tag = BOUNDARY_TAG;
+                while (offset < total) {
+                    size_t chunk = std::min(total - offset, (size_t)INT_MAX);
+                    MPI_Send(peer.buffer.data() + offset,
+                             static_cast<int>(chunk), MPI_FLOAT,
+                             peer.rank, tag, MPI_COMM_WORLD);
+                    offset += chunk;
+                    ++tag;
+                }
+            } else {
+                MPI_Isend(peer.buffer.data(), static_cast<int>(peer.buffer.size()), MPI_FLOAT,
+                          peer.rank, BOUNDARY_TAG, MPI_COMM_WORLD, &peer.request);
+            }
         } else {
-            MPI_Send(peer.buffer.data(), static_cast<int>(peer.buffer.size()), MPI_FLOAT,
-                     peer.rank, BOUNDARY_TAG, MPI_COMM_WORLD);
+            {
+                size_t total = peer.buffer.size();
+                size_t offset = 0;
+                int tag = BOUNDARY_TAG;
+                while (offset < total) {
+                    size_t chunk = std::min(total - offset, (size_t)INT_MAX);
+                    MPI_Send(peer.buffer.data() + offset,
+                             static_cast<int>(chunk), MPI_FLOAT,
+                             peer.rank, tag, MPI_COMM_WORLD);
+                    offset += chunk;
+                    ++tag;
+                }
+            }
         }
     }
     if (ex.lookahead > 0) ex.sends_in_flight = true;
