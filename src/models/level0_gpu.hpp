@@ -1,9 +1,11 @@
 #pragma once
 #include <vector>
-#include "model_setup.hpp"
-#include "I_O/inputs.hpp"
+#include "../model_setup.hpp"
+#include "../partition.hpp"
+#include "../I_O/inputs.hpp"
 
 void IntegrateLevel0GPU(const ModelSetup& setup,
+                        const Partition& part,
                         const RunoffData& runoff,
                         std::vector<float>& results,
                         const std::vector<size_t>& nodes_at_level,
