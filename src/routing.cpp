@@ -7,6 +7,11 @@
 #include <boost/numeric/odeint.hpp>
 using namespace boost::numeric::odeint;
 #include <omp.h>
+#include <future>
+
+#ifdef USE_GPU_LEVEL0
+#include "models/level0_gpu.hpp"
+#endif
 
 //my functions
 #include "dependency_graph.hpp"
@@ -55,9 +60,30 @@ void writeOutput(const ModelSetup& setup,
     std::cout << "  Writing final time step (snapshot) to netcdf...";
     std::vector<int> stream_ids(n_owned);
     size_t last_step = n_steps - 1;
+    std::cout << "  [writeOutput DEBUG] n_owned=" << n_owned
+              << " n_steps=" << n_steps << " last_step=" << last_step << "\n";
     for (size_t i_link = 0; i_link < n_owned; ++i_link) {
         q_final[i_link] = results[i_link * n_steps + last_step];
         stream_ids[i_link] = setup.node_map.at(part.global_of[i_link]).stream_id;
+    }
+    // Show first 10 level-0 links in q_final as written by writeOutput
+    {
+        size_t count = 0;
+        for (size_t i_link = 0; i_link < n_owned && count < 10; ++i_link) {
+            size_t global_idx = part.global_of[i_link];
+            const NodeInfo& nd = setup.node_map.at(global_idx);
+            if (nd.level == 0) {
+                std::cout << "    [q_final WRITE] local=" << i_link
+                          << " global=" << global_idx
+                          << " stream_id=" << nd.stream_id
+                          << " q_final=" << q_final[i_link]
+                          << " results[first]=" << results[i_link * n_steps + 0]
+                          << " results[last]=" << results[i_link * n_steps + last_step]
+                          << "\n";
+                count++;
+            }
+        }
+        std::cout << std::flush;
     }
     if (!setup.config.snapshot_per_year || is_last_chunk) {
     std::string snapshot_filename = setup.config.snapshot_filepath + "_" + time_string + suffix + ".nc";
@@ -68,23 +94,37 @@ void writeOutput(const ModelSetup& setup,
     // --------------------------------- MAXIMUM OUTPUT -----------------------------------------------------------
     if( setup.config.max_output == 1) {
         std::cout << "  Writing maximum values to netcdf...";
-        // Find maximum values for each link
-        std::vector<float> max_results(n_owned, 0.0f);
-        // Parallelize over all links
-        #pragma omp parallel for
+
+        std::vector<size_t> max_keep;
         for (size_t i_link = 0; i_link < n_owned; ++i_link) {
-            float local_max = 0.0f;
-            for (size_t t = 0; t < n_steps; ++t) {
-                float val = results[i_link * n_steps + t];
-                if (val > local_max) {
-                    local_max = val;
-                }
+            size_t global_idx = part.global_of[i_link];
+            if (setup.node_map.at(global_idx).level >= setup.config.min_level) {
+                max_keep.push_back(i_link);
             }
-            max_results[i_link] = local_max;
         }
-        std::string max_filename = setup.config.max_output_filepath + "_" + time_string + suffix + ".nc";
-        write_snapshot_netcdf(max_filename, max_results.data(), stream_ids.data(), n_owned);
-        std::cout << " completed!" << std::endl;
+
+        if (!max_keep.empty()) {
+            std::vector<float> max_results(max_keep.size(), 0.0f);
+            std::vector<int> max_stream_ids(max_keep.size());
+            #pragma omp parallel for
+            for (size_t j = 0; j < max_keep.size(); ++j) {
+                size_t i_link = max_keep[j];
+                float local_max = 0.0f;
+                for (size_t t = 0; t < n_steps; ++t) {
+                    float val = results[i_link * n_steps + t];
+                    if (val > local_max) {
+                        local_max = val;
+                    }
+                }
+                max_results[j] = local_max;
+                max_stream_ids[j] = stream_ids[i_link];
+            }
+            std::string max_filename = setup.config.max_output_filepath + "_" + time_string + suffix + ".nc";
+            write_snapshot_netcdf(max_filename, max_results.data(), max_stream_ids.data(), max_keep.size());
+            std::cout << " completed!" << std::endl;
+        } else {
+            std::cout << " skipped (no links >= min_level on this rank)" << std::endl;
+        }
     }
 
 
@@ -460,36 +500,38 @@ void ProcessChunk(const ModelSetup& setup,
                   size_t tc,
                   size_t& total_time_steps,
                   std::vector<float>& q_final,
-                  size_t& startIndex,
                   std::vector<float>& results,
                   const DependencyGraph& graph,
                   std::vector<std::atomic<int>>& pending,
-                  LevelProfiler& profiler)
+                  LevelProfiler& profiler,
+                  const RunoffData& runoff)
 {
     std::cout << "Processing chunk/file " << tc + 1 << " of " << setup.runoff_info.nchunks << ":" << std::endl;
 
-    // Compute the start index for this chunk if files change
-    if (tc > 0 && setup.runoff_info.filenames[tc] != setup.runoff_info.filenames[tc - 1]) startIndex = 0;
+    // // Compute the start index for this chunk if files change
+    // if (tc > 0 && setup.runoff_info.filenames[tc] != setup.runoff_info.filenames[tc - 1]) startIndex = 0;
     
-    //Compute starttime for this chunk
-    std::string time_string = addTimeDelta(setup.config.start_date, setup.config.calendar, total_time_steps); //time string to store the start time for this chunk
+    // //Compute starttime for this chunk
+    // std::string time_string = addTimeDelta(setup.config.start_date, setup.config.calendar, total_time_steps); //time string to store the start time for this chunk
+    // std::cout << "  Start time for this chunk: " << time_string << std::endl;
+
+    // // ----------------- RUNOFF DATA --------------------------------------
+    // std::cout << "  Reading in runoff from netcdf file: " << setup.runoff_info.filenames[tc] << "...";
+    // auto read_start = std::chrono::high_resolution_clock::now();
+    // RunoffData runoff = readTotalRunoff(setup.runoff_info.filenames[tc], 
+    //                                     setup.config.runoff_varname, 
+    //                                     setup.config.runoff_id_varname,
+    //                                     startIndex,
+    //                                     setup.config.chunk_size);
+    // auto read_end = std::chrono::high_resolution_clock::now();
+    // std::chrono::duration<double> read_elapsed = read_end - read_start;
+    // std::cout << "completed!" << std::endl;
+    // std::cout << "  Total read in time: " << read_elapsed.count() << " seconds" << std::endl;
+
+    // //Update start index for the next chunk
+    // startIndex += setup.config.chunk_size;
+    std::string time_string = addTimeDelta(setup.config.start_date, setup.config.calendar, total_time_steps);
     std::cout << "  Start time for this chunk: " << time_string << std::endl;
-
-    // ----------------- RUNOFF DATA --------------------------------------
-    std::cout << "  Reading in runoff from netcdf file: " << setup.runoff_info.filenames[tc] << "...";
-    auto read_start = std::chrono::high_resolution_clock::now();
-    RunoffData runoff = readTotalRunoff(setup.runoff_info.filenames[tc], 
-                                        setup.config.runoff_varname, 
-                                        setup.config.runoff_id_varname,
-                                        startIndex,
-                                        setup.config.chunk_size);
-    auto read_end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> read_elapsed = read_end - read_start;
-    std::cout << "completed!" << std::endl;
-    std::cout << "  Total read in time: " << read_elapsed.count() << " seconds" << std::endl;
-
-    //Update start index for the next chunk
-    startIndex += setup.config.chunk_size;
 
     // -------------------- TIME SERIES SETUP --------------------------------------  
     // User defined parameters for simulation time (user input)
@@ -525,15 +567,81 @@ void ProcessChunk(const ModelSetup& setup,
     if (setup.config.traversal == "counter") {
         // Dependency-driven: a link runs as soon as its own upstream links are done.
         IntegrateLinksByDependency(setup, part, ex, runoff, results, graph, pending, n_steps, total_time_steps, tc, q_final);
+    // } else {
+    //     // Level-synchronous: loop through each level and process nodes.
+    //     for (const auto& [level, nodes_at_level] : setup.level_groups) {
+    //         IntegrateLinksAtLevel(setup, part, ex, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final, profiler);
+    //     }
+    // }
     } else {
-        // Level-synchronous: loop through each level and process nodes.
-        for (const auto& [level, nodes_at_level] : setup.level_groups) {
-            IntegrateLinksAtLevel(setup, part, ex, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final, profiler);
+            // Level-synchronous: loop through each level and process nodes.
+            for (const auto& [level, nodes_at_level] : setup.level_groups) {
+    #ifdef USE_GPU_LEVEL0
+                if (level == 0) {
+                    IntegrateLevel0GPU(setup, part, runoff, results, nodes_at_level, n_steps, tc, q_final);
+
+                    // DEBUG: CPU cross-check for first 3 level-0 links
+                    if (tc <= 1) {
+                        size_t n_check = std::min((size_t)3, nodes_at_level.size());
+                        for (size_t dbg_i = 0; dbg_i < n_check; ++dbg_i) {
+                            size_t li = nodes_at_level[dbg_i];
+                            if (!part.owns(li)) continue;
+                            const NodeInfo& nd = setup.node_map.at(li);
+                            size_t local = part.local_of[nd.index];
+
+                            double q0_cpu;
+                            if (tc == 0) q0_cpu = setup.uini(nd.stream_id);
+                            else q0_cpu = q_final[local];
+
+                            const double A_h = nd.params[0];
+                            const double lambda_1 = nd.params[2];
+                            const double L_i = nd.params[1];
+                            const double v_0 = nd.params[3];
+                            const double invtau_cpu = 60.0 * v_0 / ((1.0 - lambda_1) * L_i);
+
+                            const size_t runoff_index = runoff.idToIndex.at(nd.stream_id);
+                            const float* runoff_ptr = &runoff.data[runoff_index * runoff.nTime];
+
+                            std::vector<float> y_p_series(n_steps, 0.0f);
+                            RHS rhs(runoff_ptr, setup.config.runoff_resolution,
+                                    y_p_series, static_cast<size_t>(setup.config.dt),
+                                    A_h, lambda_1, invtau_cpu);
+
+                            double q0_val = q0_cpu;
+                            float cpu_last = 0.0f;
+                            auto callback = [&](const double& x, const double t) {
+                                size_t step_idx = static_cast<size_t>(t / setup.config.dt);
+                                if (step_idx >= n_steps) step_idx = n_steps - 1;
+                                cpu_last = std::max(static_cast<float>(x), 1e-8f);
+                            };
+                            integrate_const(rk4_stepper, rhs, q0_val,
+                                            0.0, (double)(n_steps-1)*setup.config.dt,
+                                            setup.config.dt, callback);
+
+                            float gpu_last = results[local * n_steps + (n_steps - 1)];
+                            std::cout << "    [CROSS-CHECK tc=" << tc << "] stream_id=" << nd.stream_id
+                                      << " global=" << nd.index
+                                      << " local=" << local
+                                      << " q0=" << q0_cpu
+                                      << " cpu_last=" << cpu_last
+                                      << " gpu_last=" << gpu_last
+                                      << " diff%=" << (std::abs(gpu_last - cpu_last) / std::max(cpu_last, 1e-8f) * 100.0f)
+                                      << "\n" << std::flush;
+                        }
+                    }
+
+                    continue;
+                }
+    #endif
+                IntegrateLinksAtLevel(setup, part, ex, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final, profiler);
+                
+            }
         }
-    }
     // Hand this rank's cut-edge series to the ranks downstream of it.
     SendBoundaries(ex, part, results, n_steps);
     std::cout << "completed!" << std::endl;
+    // Prefetch: prepare next chunk's runoff on GPU during the idle window
+    // (rank 1 is still solving levels 1+, so rank 0 has nothing else to do)
     auto solve_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> solve_elapsed = solve_end - solve_start ;
     std::cout << "  Total integration time: " << solve_elapsed.count() << " seconds" << std::endl;
@@ -614,11 +722,28 @@ void runRouting(const ModelSetup& setup, int rank, int n_ranks){
     std::vector<float> results;          // declare the vector
     results.reserve(max_size);           // reserve memory upfront
 
-    // process chunks
-    size_t total_time_steps = 0; // keep tract of total simulation time
-    size_t startIndex = 0; // start index for the first chunk
+    // // process chunks
+    // size_t total_time_steps = 0; // keep tract of total simulation time
+    // size_t startIndex = 0; // start index for the first chunk
+    // for(int tc = 0; tc < setup.runoff_info.nchunks; ++tc){
+    //     ProcessChunk(setup, part, ex, tc, total_time_steps, q_final, startIndex, results, graph, pending, profiler);
+    // }
+        // process chunks
+    size_t total_time_steps = 0;
+    size_t startIndex = 0;
+
     for(int tc = 0; tc < setup.runoff_info.nchunks; ++tc){
-        ProcessChunk(setup, part, ex, tc, total_time_steps, q_final, startIndex, results, graph, pending, profiler);
+        size_t si = startIndex;
+        if (tc > 0 && setup.runoff_info.filenames[tc] != setup.runoff_info.filenames[tc - 1]) si = 0;
+
+        RunoffData runoff = readTotalRunoff(setup.runoff_info.filenames[tc],
+                                            setup.config.runoff_varname,
+                                            setup.config.runoff_id_varname,
+                                            si, setup.config.chunk_size);
+        startIndex = si + setup.config.chunk_size;
+
+        ProcessChunk(setup, part, ex, tc, total_time_steps, q_final, results,
+                     graph, pending, profiler, runoff);
     }
     FinishBoundaries(ex);   // no message may still be in flight at MPI_Finalize
     std::cout << "__________________________________________________ \n" << std::endl;
