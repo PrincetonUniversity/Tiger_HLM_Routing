@@ -351,13 +351,15 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
                   << ". It should be at least 1. Setting it to 1." << std::endl;
         config.min_level = 1; // Ensure min_level is at least 1
     }
+    std::cout << "  Output level filter: min_level = " << config.min_level
+              << " (level 0 links are always excluded from max_output and timeseries output)"
+              << std::endl;
     config.output_resolution = parser.getInt("output.resolution");
     config.link_list_filename = parser.getString("output.link_list_filename");
     config.series_filepath = parser.getString("output.series_filepath");
     config.snapshot_filepath = parser.getString("output.snapshot_filepath");
     config.max_output = parser.getInt("output.max_output", 0); // Default to 0 if not specified
     config.max_output_filepath = parser.getString("output.max_output_filepath");
-        config.use_task_scheduling = parser.getBool("solver.use_task_scheduling", false); // Default false: preserves per-level parallel_for behavior
 
     // Absent, the run owns the whole network on one rank
     config.mpi_partition_file = parser.getString("mpi.partition_file", "");
