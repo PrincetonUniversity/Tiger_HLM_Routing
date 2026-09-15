@@ -330,8 +330,11 @@ void IntegrateLevel0GPU(const ModelSetup& setup,
 }
 void FreeLevel0GPU() {
     g_ctx.A_h_d.clear();
+    g_ctx.A_h_d.shrink_to_fit();
     g_ctx.lambda_1_d.clear();
+    g_ctx.lambda_1_d.shrink_to_fit();
     g_ctx.invtau_d.clear();
+    g_ctx.invtau_d.shrink_to_fit();
     g_ctx.node_index_h.clear();
     g_ctx.local_index_h.clear();
     g_ctx.stream_id_h.clear();
