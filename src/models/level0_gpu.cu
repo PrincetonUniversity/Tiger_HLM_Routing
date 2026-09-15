@@ -328,3 +328,13 @@ void IntegrateLevel0GPU(const ModelSetup& setup,
               << "  total=" << total_ms << "ms"
               << std::endl;
 }
+void FreeLevel0GPU() {
+    g_ctx.A_h_d.clear();
+    g_ctx.lambda_1_d.clear();
+    g_ctx.invtau_d.clear();
+    g_ctx.node_index_h.clear();
+    g_ctx.local_index_h.clear();
+    g_ctx.stream_id_h.clear();
+    g_ctx.built = false;
+    g_ctx.n0    = 0;
+}
