@@ -161,6 +161,10 @@ void writeOutput(const ModelSetup& setup,
 
     // Compact results based on keep_indices
     size_t n_keep_links = keep_indices.size();
+    if (n_keep_links == 0) {
+        std::cout << " skipped (no links >= min_level on this rank)" << std::endl;
+        return;
+    }
     // Number of steps to skip per output
     size_t output_res_steps = static_cast<size_t>(setup.config.output_resolution / setup.config.dt);
     size_t n_saved_steps = (n_steps + output_res_steps - 1) / output_res_steps;
