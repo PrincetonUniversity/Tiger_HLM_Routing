@@ -11,4 +11,4 @@ void IntegrateLevel0GPU(const ModelSetup& setup,
                         const std::vector<size_t>& nodes_at_level,
                         size_t n_steps,
                         size_t tc,
-                        std::vector<float>& q_final);
+                        std::vector<float>& q_final);void FreeLevel0GPU();
