@@ -431,6 +431,19 @@ static void SolveAndRelease(TaskContext ctx, size_t link_index)
     }
 }
 
+#ifdef USE_GPU_LEVEL0
+static void ReleaseOnly(TaskContext ctx, size_t link_index)
+{
+    const size_t child_index = ctx.graph.child[link_index];
+    if (child_index == DependencyGraph::NO_CHILD) return;
+    if (!ctx.part.owns(child_index)) return;
+    if (ctx.pending[child_index].fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        #pragma omp task firstprivate(ctx, child_index) default(shared)
+        SolveAndRelease(ctx, child_index);
+    }
+}
+#endif
+
 /**
  * @brief Solves every link in the network by dependency rather than by level.
  * A link becomes eligible as soon as its own upstream links are done, so a finished
@@ -479,6 +492,13 @@ void IntegrateLinksByDependency(const ModelSetup& setup,
         #pragma omp single
         {
             for (size_t source_index : graph.sources) {
+#ifdef USE_GPU_LEVEL0
+                if (setup.node_map.at(source_index).level == 0) {
+                    #pragma omp task firstprivate(ctx, source_index) default(shared)
+                    ReleaseOnly(ctx, source_index);
+                    continue;
+                }
+#endif
                 #pragma omp task firstprivate(ctx, source_index) default(shared)
                 SolveAndRelease(ctx, source_index);
             }
@@ -570,6 +590,9 @@ void ProcessChunk(const ModelSetup& setup,
     ReceiveBoundaries(ex, n_steps);
     if (setup.config.traversal == "counter") {
         // Dependency-driven: a link runs as soon as its own upstream links are done.
+#ifdef USE_GPU_LEVEL0
+        IntegrateLevel0GPU(setup, part, runoff, results, setup.level_groups.at(0), n_steps, tc, q_final);
+#endif
         IntegrateLinksByDependency(setup, part, ex, runoff, results, graph, pending, n_steps, total_time_steps, tc, q_final);
     // } else {
     //     // Level-synchronous: loop through each level and process nodes.
