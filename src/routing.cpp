@@ -9,6 +9,11 @@
 #include <boost/numeric/odeint.hpp>
 using namespace boost::numeric::odeint;
 #include <omp.h>
+#include <future>
+
+#ifdef USE_GPU_LEVEL0
+#include "models/level0_gpu.hpp"
+#endif
 
 //my functions
 #include "dependency_graph.hpp"
@@ -40,7 +45,8 @@ void writeOutput(const ModelSetup& setup,
                  size_t n_steps,
                  const std::vector<int>& sim_times,
                  std::vector<float>& q_final,
-                 const std::string& time_string)
+                 const std::string& time_string,
+                 bool is_last_chunk)
 {
     // Every array here is in local index space: a rank writes only the links it owns.
     // Local indices are assigned in increasing global order, so a single-rank run walks
@@ -56,34 +62,71 @@ void writeOutput(const ModelSetup& setup,
     std::cout << "  Writing final time step (snapshot) to netcdf...";
     std::vector<int> stream_ids(n_owned);
     size_t last_step = n_steps - 1;
+//     std::cout << "  [writeOutput DEBUG] n_owned=" << n_owned
+//               << " n_steps=" << n_steps << " last_step=" << last_step << "\n";
     for (size_t i_link = 0; i_link < n_owned; ++i_link) {
         q_final[i_link] = results[i_link * n_steps + last_step];
         stream_ids[i_link] = setup.node_map.at(part.global_of[i_link]).stream_id;
     }
+//     // Show first 10 level-0 links in q_final as written by writeOutput
+//     {
+//         size_t count = 0;
+//         for (size_t i_link = 0; i_link < n_owned && count < 10; ++i_link) {
+//             size_t global_idx = part.global_of[i_link];
+//             const NodeInfo& nd = setup.node_map.at(global_idx);
+//             if (nd.level == 0) {
+//                 std::cout << "    [q_final WRITE] local=" << i_link
+//                           << " global=" << global_idx
+//                           << " stream_id=" << nd.stream_id
+//                           << " q_final=" << q_final[i_link]
+//                           << " results[first]=" << results[i_link * n_steps + 0]
+//                           << " results[last]=" << results[i_link * n_steps + last_step]
+//                           << "\n";
+//                 count++;
+//             }
+//         }
+//         std::cout << std::flush;
+//     }
+    if (!setup.config.snapshot_per_year || is_last_chunk) {
     std::string snapshot_filename = setup.config.snapshot_filepath + "_" + time_string + suffix + ".nc";
     write_snapshot_netcdf(snapshot_filename, q_final.data(), stream_ids.data(), n_owned);
     std::cout << "completed!" << std::endl;
 
+    }
     // --------------------------------- MAXIMUM OUTPUT -----------------------------------------------------------
     if( setup.config.max_output == 1) {
         std::cout << "  Writing maximum values to netcdf...";
-        // Find maximum values for each link
-        std::vector<float> max_results(n_owned, 0.0f);
-        // Parallelize over all links
-        #pragma omp parallel for
+
+        std::vector<size_t> max_keep;
         for (size_t i_link = 0; i_link < n_owned; ++i_link) {
-            float local_max = 0.0f;
-            for (size_t t = 0; t < n_steps; ++t) {
-                float val = results[i_link * n_steps + t];
-                if (val > local_max) {
-                    local_max = val;
-                }
+            size_t global_idx = part.global_of[i_link];
+            if (setup.node_map.at(global_idx).level >= setup.config.min_level) {
+                max_keep.push_back(i_link);
             }
-            max_results[i_link] = local_max;
         }
-        std::string max_filename = setup.config.max_output_filepath + "_" + time_string + suffix + ".nc";
-        write_snapshot_netcdf(max_filename, max_results.data(), stream_ids.data(), n_owned);
-        std::cout << " completed!" << std::endl;
+
+        if (!max_keep.empty()) {
+            std::vector<float> max_results(max_keep.size(), 0.0f);
+            std::vector<int> max_stream_ids(max_keep.size());
+            #pragma omp parallel for
+            for (size_t j = 0; j < max_keep.size(); ++j) {
+                size_t i_link = max_keep[j];
+                float local_max = 0.0f;
+                for (size_t t = 0; t < n_steps; ++t) {
+                    float val = results[i_link * n_steps + t];
+                    if (val > local_max) {
+                        local_max = val;
+                    }
+                }
+                max_results[j] = local_max;
+                max_stream_ids[j] = stream_ids[i_link];
+            }
+            std::string max_filename = setup.config.max_output_filepath + "_" + time_string + suffix + ".nc";
+            write_snapshot_netcdf(max_filename, max_results.data(), max_stream_ids.data(), max_keep.size());
+            std::cout << " completed!" << std::endl;
+        } else {
+            std::cout << " skipped (no links >= min_level on this rank)" << std::endl;
+        }
     }
 
 
@@ -120,6 +163,10 @@ void writeOutput(const ModelSetup& setup,
 
     // Compact results based on keep_indices
     size_t n_keep_links = keep_indices.size();
+    if (n_keep_links == 0) {
+        std::cout << " skipped (no links >= min_level on this rank)" << std::endl;
+        return;
+    }
     // Number of steps to skip per output
     size_t output_res_steps = static_cast<size_t>(setup.config.output_resolution / setup.config.dt);
     size_t n_saved_steps = (n_steps + output_res_steps - 1) / output_res_steps;
@@ -386,6 +433,19 @@ static void SolveAndRelease(TaskContext ctx, size_t link_index)
     }
 }
 
+#ifdef USE_GPU_LEVEL0
+static void ReleaseOnly(TaskContext ctx, size_t link_index)
+{
+    const size_t child_index = ctx.graph.child[link_index];
+    if (child_index == DependencyGraph::NO_CHILD) return;
+    if (!ctx.part.owns(child_index)) return;
+    if (ctx.pending[child_index].fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        #pragma omp task firstprivate(ctx, child_index) default(shared)
+        SolveAndRelease(ctx, child_index);
+    }
+}
+#endif
+
 /**
  * @brief Solves every link in the network by dependency rather than by level.
  * A link becomes eligible as soon as its own upstream links are done, so a finished
@@ -434,6 +494,13 @@ void IntegrateLinksByDependency(const ModelSetup& setup,
         #pragma omp single
         {
             for (size_t source_index : graph.sources) {
+#ifdef USE_GPU_LEVEL0
+                if (setup.node_map.at(source_index).level == 0) {
+                    #pragma omp task firstprivate(ctx, source_index) default(shared)
+                    ReleaseOnly(ctx, source_index);
+                    continue;
+                }
+#endif
                 #pragma omp task firstprivate(ctx, source_index) default(shared)
                 SolveAndRelease(ctx, source_index);
             }
@@ -508,7 +575,7 @@ void ProcessChunk(const ModelSetup& setup,
     std::cout << "Processing chunk/file " << tc + 1 << " of " << setup.runoff_info.nchunks << ":" << std::endl;
 
     // The start index within the file is precomputed in runRouting, because the prefetch
-    // needs the NEXT chunk's offset while this one is still being solved.
+    // needs the next chunk's offset while this one is still being solved.
 
     //Compute starttime for this chunk
     std::string time_string = addTimeDelta(setup.config.start_date, setup.config.calendar, total_time_steps); //time string to store the start time for this chunk
@@ -552,13 +619,74 @@ void ProcessChunk(const ModelSetup& setup,
     const double boundary_wait = ReceiveBoundaries(ex, n_steps);
     if (setup.config.traversal == "counter") {
         // Dependency-driven: a link runs as soon as its own upstream links are done.
+#ifdef USE_GPU_LEVEL0
+        IntegrateLevel0GPU(setup, part, runoff, results, setup.level_groups.at(0), n_steps, tc, q_final);
+#endif
         IntegrateLinksByDependency(setup, part, ex, runoff, results, graph, pending, n_steps, total_time_steps, tc, q_final);
     } else {
-        // Level-synchronous: loop through each level and process nodes.
-        for (const auto& [level, nodes_at_level] : setup.level_groups) {
-            IntegrateLinksAtLevel(setup, part, ex, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final, profiler);
+            // Level-synchronous: loop through each level and process nodes.
+            for (const auto& [level, nodes_at_level] : setup.level_groups) {
+    #ifdef USE_GPU_LEVEL0
+                if (level == 0) {
+                    IntegrateLevel0GPU(setup, part, runoff, results, nodes_at_level, n_steps, tc, q_final);
+
+//                     // DEBUG: CPU cross-check for first 3 level-0 links
+//                     if (tc <= 1) {
+//                         size_t n_check = std::min((size_t)3, nodes_at_level.size());
+//                         for (size_t dbg_i = 0; dbg_i < n_check; ++dbg_i) {
+//                             size_t li = nodes_at_level[dbg_i];
+//                             if (!part.owns(li)) continue;
+//                             const NodeInfo& nd = setup.node_map.at(li);
+//                             size_t local = part.local_of[nd.index];
+// 
+//                             double q0_cpu;
+//                             if (tc == 0) q0_cpu = setup.uini(nd.stream_id);
+//                             else q0_cpu = q_final[local];
+// 
+//                             const double A_h = nd.params[0];
+//                             const double lambda_1 = nd.params[2];
+//                             const double L_i = nd.params[1];
+//                             const double v_0 = nd.params[3];
+//                             const double invtau_cpu = 60.0 * v_0 / ((1.0 - lambda_1) * L_i);
+// 
+//                             const size_t runoff_index = runoff.idToIndex.at(nd.stream_id);
+//                             const float* runoff_ptr = &runoff.data[runoff_index * runoff.nTime];
+// 
+//                             std::vector<float> y_p_series(n_steps, 0.0f);
+//                             RHS rhs(runoff_ptr, setup.config.runoff_resolution,
+//                                     y_p_series, static_cast<size_t>(setup.config.dt),
+//                                     A_h, lambda_1, invtau_cpu);
+// 
+//                             double q0_val = q0_cpu;
+//                             float cpu_last = 0.0f;
+//                             auto callback = [&](const double& x, const double t) {
+//                                 size_t step_idx = static_cast<size_t>(t / setup.config.dt);
+//                                 if (step_idx >= n_steps) step_idx = n_steps - 1;
+//                                 cpu_last = std::max(static_cast<float>(x), 1e-8f);
+//                             };
+//                             integrate_const(rk4_stepper, rhs, q0_val,
+//                                             0.0, (double)(n_steps-1)*setup.config.dt,
+//                                             setup.config.dt, callback);
+// 
+//                             float gpu_last = results[local * n_steps + (n_steps - 1)];
+//                             std::cout << "    [CROSS-CHECK tc=" << tc << "] stream_id=" << nd.stream_id
+//                                       << " global=" << nd.index
+//                                       << " local=" << local
+//                                       << " q0=" << q0_cpu
+//                                       << " cpu_last=" << cpu_last
+//                                       << " gpu_last=" << gpu_last
+//                                       << " diff%=" << (std::abs(gpu_last - cpu_last) / std::max(cpu_last, 1e-8f) * 100.0f)
+//                                       << "\n" << std::flush;
+//                         }
+//                     }
+
+                    continue;
+                }
+    #endif
+                IntegrateLinksAtLevel(setup, part, ex, runoff, results, level, nodes_at_level, n_steps, total_time_steps, tc, q_final, profiler);
+                
+            }
         }
-    }
     // Hand this rank's cut-edge series to the ranks downstream of it.
     SendBoundaries(ex, part, results, n_steps, tc);
     std::cout << "completed!" << std::endl;
@@ -579,7 +707,8 @@ void ProcessChunk(const ModelSetup& setup,
     // opens a file.
     prefetch.wait_idle();
     auto write_start = std::chrono::high_resolution_clock::now();
-    writeOutput(setup, part, results, n_steps, sim_times, q_final, time_string);
+    bool is_last_chunk = (tc + 1 == static_cast<size_t>(setup.runoff_info.nchunks));
+    writeOutput(setup, part, results, n_steps, sim_times, q_final, time_string, is_last_chunk);
     auto write_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> write_elapsed = write_end - write_start;
     std::cout << "  Total write time: " << write_elapsed.count() << " seconds" << std::endl;
@@ -656,9 +785,7 @@ void runRouting(const ModelSetup& setup, int rank, int n_ranks){
     std::vector<float> results;          // declare the vector
     results.reserve(max_size);           // reserve memory upfront
 
-    // Where each chunk starts inside its file. Precomputed rather than carried as a
-    // running counter, because the prefetch needs chunk t+1's offset while chunk t is
-    // still being solved, and a mutable counter cannot answer that.
+    // Precomputed because the prefetch needs chunk t+1's offset while chunk t is still solving.
     std::vector<size_t> chunk_start(setup.runoff_info.nchunks, 0);
     for (int tc = 1; tc < setup.runoff_info.nchunks; ++tc) {
         const bool same_file =

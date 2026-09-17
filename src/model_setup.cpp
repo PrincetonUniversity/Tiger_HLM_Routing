@@ -26,6 +26,7 @@ ModelSetup setupModel(const char* config_path) {
     std::cout << "Loading user inputs from YAML file...";
     setup.config = ConfigLoader::loadConfig(config_path);
     std::cout << "completed!" << std::endl;
+    std::cout << "  snapshot_per_year: " << (setup.config.snapshot_per_year ? "true" : "false") << std::endl;
 
     // Read node levels from CSV file
     std::cout << "Loading network parameters...";

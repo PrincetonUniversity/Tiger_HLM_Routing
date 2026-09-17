@@ -6,13 +6,43 @@
 #include <chrono>
 #include <iostream>
 #include <map>
+#include <climits>
 
 #include <mpi.h>
 
 namespace {
 
-// One message per rank pair, so a single tag suffices.
+// One message per rank pair, so a single tag suffices until the message has to be split.
 constexpr int BOUNDARY_TAG = 7001;
+
+// Messages longer than an MPI int count are sent in pieces, one tag each
+constexpr size_t MAX_MPI_COUNT = static_cast<size_t>(INT_MAX);
+
+void SendChunked(const float* data, size_t count, int peer_rank)
+{
+    size_t offset = 0;
+    int tag = BOUNDARY_TAG;
+    while (offset < count) {
+        const size_t piece = std::min(count - offset, MAX_MPI_COUNT);
+        MPI_Send(data + offset, static_cast<int>(piece), MPI_FLOAT,
+                 peer_rank, tag, MPI_COMM_WORLD);
+        offset += piece;
+        ++tag;
+    }
+}
+
+void RecvChunked(float* data, size_t count, int peer_rank)
+{
+    size_t offset = 0;
+    int tag = BOUNDARY_TAG;
+    while (offset < count) {
+        const size_t piece = std::min(count - offset, MAX_MPI_COUNT);
+        MPI_Recv(data + offset, static_cast<int>(piece), MPI_FLOAT,
+                 peer_rank, tag, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        offset += piece;
+        ++tag;
+    }
+}
 
 } // namespace
 
@@ -123,8 +153,7 @@ double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps)
         if (peer.buffers.empty()) peer.buffers.resize(1);
         std::vector<float>& buffer = peer.buffers[0];
         buffer.resize(peer.links.size() * n_steps);
-        MPI_Recv(buffer.data(), static_cast<int>(buffer.size()), MPI_FLOAT,
-                 peer.rank, BOUNDARY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        RecvChunked(buffer.data(), buffer.size(), peer.rank);
         // Both sides pack in ascending global link index, so position determines identity.
         for (size_t k = 0; k < peer.links.size(); ++k) {
             ex.arrived[peer.links[k]] = buffer.data() + k * n_steps;
@@ -150,9 +179,7 @@ void SendBoundaries(BoundaryExchange& ex,
             peer.buffers.resize(slots);
             peer.requests.assign(slots, MPI_REQUEST_NULL);
         }
-        // Reclaim this slot. Its message is `slots` chunks old, so with enough slots the
-        // wait is already satisfied and the rank never blocks here. MPI_Wait on a null
-        // request returns immediately, which covers the first pass and the blocking mode.
+        // reclaim this slot
         MPI_Wait(&peer.requests[slot], MPI_STATUS_IGNORE);
 
         std::vector<float>& buffer = peer.buffers[slot];
@@ -163,12 +190,19 @@ void SendBoundaries(BoundaryExchange& ex,
                       results.begin() + static_cast<std::ptrdiff_t>((local + 1) * n_steps),
                       buffer.begin() + static_cast<std::ptrdiff_t>(k * n_steps));
         }
-        if (ex.lookahead > 0) {
+        if (ex.lookahead > 0 && buffer.size() <= MAX_MPI_COUNT) {
             MPI_Isend(buffer.data(), static_cast<int>(buffer.size()), MPI_FLOAT,
                       peer.rank, BOUNDARY_TAG, MPI_COMM_WORLD, &peer.requests[slot]);
         } else {
-            MPI_Send(buffer.data(), static_cast<int>(buffer.size()), MPI_FLOAT,
-                     peer.rank, BOUNDARY_TAG, MPI_COMM_WORLD);
+            // Split messages cannot be pipelined, so send blocking
+            if (ex.lookahead > 0 && !peer.oversize_warned) {
+                std::cerr << "Warning: boundary message to rank " << peer.rank << " is "
+                          << buffer.size() << " floats, past the " << MAX_MPI_COUNT
+                          << " MPI can count. Sending it blocking, so lookahead is off"
+                          << " for this peer." << std::endl;
+                peer.oversize_warned = true;
+            }
+            SendChunked(buffer.data(), buffer.size(), peer.rank);
         }
     }
 }

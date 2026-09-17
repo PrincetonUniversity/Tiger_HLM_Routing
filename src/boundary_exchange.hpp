@@ -30,6 +30,7 @@ struct BoundaryExchange {
         // has left, so the count is how many chunks this rank may run ahead.
         std::vector<std::vector<float>> buffers;   // [slot] of links.size() * n_steps
         std::vector<MPI_Request>        requests;  // [slot], MPI_REQUEST_NULL when idle
+        bool oversize_warned = false;   // the too-big-to-pipeline warning is printed once
     };
 
     std::vector<Peer> recv_from;  // lower ranks; their links are parents of links I own
