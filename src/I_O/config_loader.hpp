@@ -60,6 +60,7 @@ struct ModelConfig {
     std::string series_filepath; 
     std::string snapshot_filepath; 
     int max_output; // 0 for no max output, 1 for max output
+    int max_output_level; // lowest level written to max_output; default 0, every link
     std::string max_output_filepath;
 
     // Distribution across MPI ranks.

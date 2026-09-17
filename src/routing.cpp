@@ -100,7 +100,7 @@ void writeOutput(const ModelSetup& setup,
         std::vector<size_t> max_keep;
         for (size_t i_link = 0; i_link < n_owned; ++i_link) {
             size_t global_idx = part.global_of[i_link];
-            if (setup.node_map.at(global_idx).level >= setup.config.min_level) {
+            if (setup.node_map.at(global_idx).level >= setup.config.max_output_level) {
                 max_keep.push_back(i_link);
             }
         }
@@ -125,7 +125,7 @@ void writeOutput(const ModelSetup& setup,
             write_snapshot_netcdf(max_filename, max_results.data(), max_stream_ids.data(), max_keep.size());
             std::cout << " completed!" << std::endl;
         } else {
-            std::cout << " skipped (no links >= min_level on this rank)" << std::endl;
+            std::cout << " skipped (no links >= max_output_level on this rank)" << std::endl;
         }
     }
 

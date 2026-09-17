@@ -351,14 +351,19 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
                   << ". It should be at least 1. Setting it to 1." << std::endl;
         config.min_level = 1; // Ensure min_level is at least 1
     }
-    std::cout << "  Output level filter: min_level = " << config.min_level
-              << " (level 0 links are always excluded from max_output and timeseries output)"
-              << std::endl;
     config.output_resolution = parser.getInt("output.resolution");
     config.link_list_filename = parser.getString("output.link_list_filename");
     config.series_filepath = parser.getString("output.series_filepath");
     config.snapshot_filepath = parser.getString("output.snapshot_filepath");
     config.max_output = parser.getInt("output.max_output", 0); // Default to 0 if not specified
+    config.max_output_level = parser.getInt("output.max_output_level", 0);
+    if (config.max_output_level < 0) {
+        std::cerr << "Warning: output.max_output_level " << config.max_output_level
+                  << " set to 0." << std::endl;
+        config.max_output_level = 0;
+    }
+    std::cout << "  Output level filter: timeseries level >= " << config.min_level
+              << ", max_output level >= " << config.max_output_level << std::endl;
     config.max_output_filepath = parser.getString("output.max_output_filepath");
 
     // Absent, the run owns the whole network on one rank
