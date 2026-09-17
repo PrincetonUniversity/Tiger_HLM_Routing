@@ -156,7 +156,7 @@ void IntegrateLevel0GPU(const ModelSetup& setup,
 
     std::vector<double> h_q0(n0);
     if (tc > 0) {
-        std::cout << "    [GPU-L0 READ DEBUG] tc=" << tc << " reading q_final for chunk start:\n";
+//         std::cout << "    [GPU-L0 READ DEBUG] tc=" << tc << " reading q_final for chunk start:\n";
     }
     for (size_t k = 0; k < n0; ++k) {
         if (tc == 0) {
@@ -164,14 +164,14 @@ void IntegrateLevel0GPU(const ModelSetup& setup,
         } else {
             size_t local_idx = g_ctx.local_index_h[k];
             h_q0[k] = q_final[local_idx];
-            if (k < 5) {
-                std::cout << "      k=" << k
-                          << " global=" << g_ctx.node_index_h[k]
-                          << " local=" << local_idx
-                          << " stream_id=" << g_ctx.stream_id_h[k]
-                          << " q_final_read=" << h_q0[k]
-                          << "\n";
-            }
+//             if (k < 5) {
+//                 std::cout << "      k=" << k
+//                           << " global=" << g_ctx.node_index_h[k]
+//                           << " local=" << local_idx
+//                           << " stream_id=" << g_ctx.stream_id_h[k]
+//                           << " q_final_read=" << h_q0[k]
+//                           << "\n";
+//             }
             if (h_q0[k] <= 0.0) {
                 fprintf(stderr, "Level0GPU: non-positive q0 at link %zu\n",
                         g_ctx.node_index_h[k]);
@@ -258,49 +258,49 @@ void IntegrateLevel0GPU(const ModelSetup& setup,
         steps_done += this_batch;
         n_batches++;
     }
-    // ======== DEBUG: dump GPU state for chunk handoff ========
-    {
-        std::vector<double> h_q_final_gpu(n0);
-        cudaMemcpy(h_q_final_gpu.data(), q_ptr, n0 * sizeof(double), cudaMemcpyDeviceToHost);
-
-        size_t last_step = n_steps - 1;
-        std::cout << "    [GPU-L0 DEBUG] tc=" << tc << " n0=" << n0
-                  << " n_steps=" << n_steps << " last_step=" << last_step << "\n";
-
-        // Show first 5 links: device q vs results buffer vs q_final handoff
-        size_t show = std::min(n0, (size_t)5);
-        for (size_t k = 0; k < show; ++k) {
-            size_t local = g_ctx.local_index_h[k];
-            size_t gidx  = g_ctx.node_index_h[k];
-            int    sid   = g_ctx.stream_id_h[k];
-            float  res_first = results[local * n_steps + 0];
-            float  res_last  = results[local * n_steps + last_step];
-            std::cout << "      k=" << k
-                      << " global=" << gidx
-                      << " local=" << local
-                      << " stream_id=" << sid
-                      << " q0_input=" << h_q0[k]
-                      << " d_q_final=" << h_q_final_gpu[k]
-                      << " results[0]=" << res_first
-                      << " results[last]=" << res_last
-                      << "\n";
-        }
-
-        // Show last 3 links too
-        for (size_t k = (n0 > 5 ? n0 - 3 : 5); k < n0; ++k) {
-            size_t local = g_ctx.local_index_h[k];
-            float  res_last  = results[local * n_steps + last_step];
-            std::cout << "      k=" << k
-                      << " global=" << g_ctx.node_index_h[k]
-                      << " local=" << local
-                      << " stream_id=" << g_ctx.stream_id_h[k]
-                      << " q0_input=" << h_q0[k]
-                      << " d_q_final=" << h_q_final_gpu[k]
-                      << " results[last]=" << res_last
-                      << "\n";
-        }
-        std::cout << std::flush;
-    }
+//     // ======== DEBUG: dump GPU state for chunk handoff ========
+//     {
+//         std::vector<double> h_q_final_gpu(n0);
+//         cudaMemcpy(h_q_final_gpu.data(), q_ptr, n0 * sizeof(double), cudaMemcpyDeviceToHost);
+// 
+//         size_t last_step = n_steps - 1;
+//         std::cout << "    [GPU-L0 DEBUG] tc=" << tc << " n0=" << n0
+//                   << " n_steps=" << n_steps << " last_step=" << last_step << "\n";
+// 
+//         // Show first 5 links: device q vs results buffer vs q_final handoff
+//         size_t show = std::min(n0, (size_t)5);
+//         for (size_t k = 0; k < show; ++k) {
+//             size_t local = g_ctx.local_index_h[k];
+//             size_t gidx  = g_ctx.node_index_h[k];
+//             int    sid   = g_ctx.stream_id_h[k];
+//             float  res_first = results[local * n_steps + 0];
+//             float  res_last  = results[local * n_steps + last_step];
+//             std::cout << "      k=" << k
+//                       << " global=" << gidx
+//                       << " local=" << local
+//                       << " stream_id=" << sid
+//                       << " q0_input=" << h_q0[k]
+//                       << " d_q_final=" << h_q_final_gpu[k]
+//                       << " results[0]=" << res_first
+//                       << " results[last]=" << res_last
+//                       << "\n";
+//         }
+// 
+//         // Show last 3 links too
+//         for (size_t k = (n0 > 5 ? n0 - 3 : 5); k < n0; ++k) {
+//             size_t local = g_ctx.local_index_h[k];
+//             float  res_last  = results[local * n_steps + last_step];
+//             std::cout << "      k=" << k
+//                       << " global=" << g_ctx.node_index_h[k]
+//                       << " local=" << local
+//                       << " stream_id=" << g_ctx.stream_id_h[k]
+//                       << " q0_input=" << h_q0[k]
+//                       << " d_q_final=" << h_q_final_gpu[k]
+//                       << " results[last]=" << res_last
+//                       << "\n";
+//         }
+//         std::cout << std::flush;
+//     }
 
     cudaDeviceSynchronize();
     auto integrate_end = std::chrono::high_resolution_clock::now();
