@@ -60,31 +60,31 @@ void writeOutput(const ModelSetup& setup,
     std::cout << "  Writing final time step (snapshot) to netcdf...";
     std::vector<int> stream_ids(n_owned);
     size_t last_step = n_steps - 1;
-    std::cout << "  [writeOutput DEBUG] n_owned=" << n_owned
-              << " n_steps=" << n_steps << " last_step=" << last_step << "\n";
+//     std::cout << "  [writeOutput DEBUG] n_owned=" << n_owned
+//               << " n_steps=" << n_steps << " last_step=" << last_step << "\n";
     for (size_t i_link = 0; i_link < n_owned; ++i_link) {
         q_final[i_link] = results[i_link * n_steps + last_step];
         stream_ids[i_link] = setup.node_map.at(part.global_of[i_link]).stream_id;
     }
-    // Show first 10 level-0 links in q_final as written by writeOutput
-    {
-        size_t count = 0;
-        for (size_t i_link = 0; i_link < n_owned && count < 10; ++i_link) {
-            size_t global_idx = part.global_of[i_link];
-            const NodeInfo& nd = setup.node_map.at(global_idx);
-            if (nd.level == 0) {
-                std::cout << "    [q_final WRITE] local=" << i_link
-                          << " global=" << global_idx
-                          << " stream_id=" << nd.stream_id
-                          << " q_final=" << q_final[i_link]
-                          << " results[first]=" << results[i_link * n_steps + 0]
-                          << " results[last]=" << results[i_link * n_steps + last_step]
-                          << "\n";
-                count++;
-            }
-        }
-        std::cout << std::flush;
-    }
+//     // Show first 10 level-0 links in q_final as written by writeOutput
+//     {
+//         size_t count = 0;
+//         for (size_t i_link = 0; i_link < n_owned && count < 10; ++i_link) {
+//             size_t global_idx = part.global_of[i_link];
+//             const NodeInfo& nd = setup.node_map.at(global_idx);
+//             if (nd.level == 0) {
+//                 std::cout << "    [q_final WRITE] local=" << i_link
+//                           << " global=" << global_idx
+//                           << " stream_id=" << nd.stream_id
+//                           << " q_final=" << q_final[i_link]
+//                           << " results[first]=" << results[i_link * n_steps + 0]
+//                           << " results[last]=" << results[i_link * n_steps + last_step]
+//                           << "\n";
+//                 count++;
+//             }
+//         }
+//         std::cout << std::flush;
+//     }
     if (!setup.config.snapshot_per_year || is_last_chunk) {
     std::string snapshot_filename = setup.config.snapshot_filepath + "_" + time_string + suffix + ".nc";
     write_snapshot_netcdf(snapshot_filename, q_final.data(), stream_ids.data(), n_owned);
@@ -607,55 +607,55 @@ void ProcessChunk(const ModelSetup& setup,
                 if (level == 0) {
                     IntegrateLevel0GPU(setup, part, runoff, results, nodes_at_level, n_steps, tc, q_final);
 
-                    // DEBUG: CPU cross-check for first 3 level-0 links
-                    if (tc <= 1) {
-                        size_t n_check = std::min((size_t)3, nodes_at_level.size());
-                        for (size_t dbg_i = 0; dbg_i < n_check; ++dbg_i) {
-                            size_t li = nodes_at_level[dbg_i];
-                            if (!part.owns(li)) continue;
-                            const NodeInfo& nd = setup.node_map.at(li);
-                            size_t local = part.local_of[nd.index];
-
-                            double q0_cpu;
-                            if (tc == 0) q0_cpu = setup.uini(nd.stream_id);
-                            else q0_cpu = q_final[local];
-
-                            const double A_h = nd.params[0];
-                            const double lambda_1 = nd.params[2];
-                            const double L_i = nd.params[1];
-                            const double v_0 = nd.params[3];
-                            const double invtau_cpu = 60.0 * v_0 / ((1.0 - lambda_1) * L_i);
-
-                            const size_t runoff_index = runoff.idToIndex.at(nd.stream_id);
-                            const float* runoff_ptr = &runoff.data[runoff_index * runoff.nTime];
-
-                            std::vector<float> y_p_series(n_steps, 0.0f);
-                            RHS rhs(runoff_ptr, setup.config.runoff_resolution,
-                                    y_p_series, static_cast<size_t>(setup.config.dt),
-                                    A_h, lambda_1, invtau_cpu);
-
-                            double q0_val = q0_cpu;
-                            float cpu_last = 0.0f;
-                            auto callback = [&](const double& x, const double t) {
-                                size_t step_idx = static_cast<size_t>(t / setup.config.dt);
-                                if (step_idx >= n_steps) step_idx = n_steps - 1;
-                                cpu_last = std::max(static_cast<float>(x), 1e-8f);
-                            };
-                            integrate_const(rk4_stepper, rhs, q0_val,
-                                            0.0, (double)(n_steps-1)*setup.config.dt,
-                                            setup.config.dt, callback);
-
-                            float gpu_last = results[local * n_steps + (n_steps - 1)];
-                            std::cout << "    [CROSS-CHECK tc=" << tc << "] stream_id=" << nd.stream_id
-                                      << " global=" << nd.index
-                                      << " local=" << local
-                                      << " q0=" << q0_cpu
-                                      << " cpu_last=" << cpu_last
-                                      << " gpu_last=" << gpu_last
-                                      << " diff%=" << (std::abs(gpu_last - cpu_last) / std::max(cpu_last, 1e-8f) * 100.0f)
-                                      << "\n" << std::flush;
-                        }
-                    }
+//                     // DEBUG: CPU cross-check for first 3 level-0 links
+//                     if (tc <= 1) {
+//                         size_t n_check = std::min((size_t)3, nodes_at_level.size());
+//                         for (size_t dbg_i = 0; dbg_i < n_check; ++dbg_i) {
+//                             size_t li = nodes_at_level[dbg_i];
+//                             if (!part.owns(li)) continue;
+//                             const NodeInfo& nd = setup.node_map.at(li);
+//                             size_t local = part.local_of[nd.index];
+// 
+//                             double q0_cpu;
+//                             if (tc == 0) q0_cpu = setup.uini(nd.stream_id);
+//                             else q0_cpu = q_final[local];
+// 
+//                             const double A_h = nd.params[0];
+//                             const double lambda_1 = nd.params[2];
+//                             const double L_i = nd.params[1];
+//                             const double v_0 = nd.params[3];
+//                             const double invtau_cpu = 60.0 * v_0 / ((1.0 - lambda_1) * L_i);
+// 
+//                             const size_t runoff_index = runoff.idToIndex.at(nd.stream_id);
+//                             const float* runoff_ptr = &runoff.data[runoff_index * runoff.nTime];
+// 
+//                             std::vector<float> y_p_series(n_steps, 0.0f);
+//                             RHS rhs(runoff_ptr, setup.config.runoff_resolution,
+//                                     y_p_series, static_cast<size_t>(setup.config.dt),
+//                                     A_h, lambda_1, invtau_cpu);
+// 
+//                             double q0_val = q0_cpu;
+//                             float cpu_last = 0.0f;
+//                             auto callback = [&](const double& x, const double t) {
+//                                 size_t step_idx = static_cast<size_t>(t / setup.config.dt);
+//                                 if (step_idx >= n_steps) step_idx = n_steps - 1;
+//                                 cpu_last = std::max(static_cast<float>(x), 1e-8f);
+//                             };
+//                             integrate_const(rk4_stepper, rhs, q0_val,
+//                                             0.0, (double)(n_steps-1)*setup.config.dt,
+//                                             setup.config.dt, callback);
+// 
+//                             float gpu_last = results[local * n_steps + (n_steps - 1)];
+//                             std::cout << "    [CROSS-CHECK tc=" << tc << "] stream_id=" << nd.stream_id
+//                                       << " global=" << nd.index
+//                                       << " local=" << local
+//                                       << " q0=" << q0_cpu
+//                                       << " cpu_last=" << cpu_last
+//                                       << " gpu_last=" << gpu_last
+//                                       << " diff%=" << (std::abs(gpu_last - cpu_last) / std::max(cpu_last, 1e-8f) * 100.0f)
+//                                       << "\n" << std::flush;
+//                         }
+//                     }
 
                     continue;
                 }
