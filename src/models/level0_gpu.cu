@@ -56,7 +56,8 @@ struct FusedRK4BatchFunctor {
         double k4 = rhs(qk + dt*k3,     r4, ah, lam, itau);
 
         double q_new = qk + (dt / 6.0) * (k1 + 2.0*k2 + 2.0*k3 + k4);
-        if (q_new < 1e-8) q_new = 1e-8;
+        // if q_new is negative or NaN, set to 1e-8
+        q_new = fmax(q_new, 1e-8);
         q[k] = q_new;
         batch_out[k * batch_size + step_in_batch] = static_cast<float>(q_new);
     }
