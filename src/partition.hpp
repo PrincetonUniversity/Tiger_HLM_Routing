@@ -12,8 +12,10 @@
  * rank to use a fraction of it. Every rank therefore keeps a dense local index space
  * 0..n_owned-1, and this maps between the two.
  *
- * Local indices are assigned in increasing global order, so a single-rank run is the
- * identity map and behaves exactly as before.
+ * Local indices start out in increasing global order. A distributed run then regroups
+ * them by destination rank (GroupLocalIndicesByDestination) so each peer's outgoing
+ * series sit contiguously in `results`. A single-rank run has no cut edges, so its order
+ * is the identity map.
  */
 struct Partition {
     static constexpr size_t NOT_OWNED = static_cast<size_t>(-1);
@@ -49,3 +51,14 @@ Partition LoadPartition(size_t n_links,
                         int rank,
                         int n_ranks,
                         const std::string& table_path = "<routing table csv>");
+
+/**
+ * @brief Sorts local indices by (destination rank, global index), so each peer's outgoing
+ * links are one contiguous, ascending block in `results` that can be sent without packing.
+ *
+ * Call after the dependency graph is built and before anything is stored by local index.
+ * With no cut edges the order is unchanged.
+ */
+void GroupLocalIndicesByDestination(Partition& part,
+                                    const std::vector<size_t>& child,
+                                    size_t no_child);

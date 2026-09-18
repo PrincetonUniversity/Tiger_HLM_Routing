@@ -97,6 +97,17 @@ BoundaryExchange BuildBoundaryExchange(const Partition& part, const DependencyGr
         p.rank = peer;
         p.links = links;
         std::sort(p.links.begin(), p.links.end());
+        // blocking send reads this group from `results`,
+        // GroupLocalIndicesByDestination ensures contiguity and index order
+        p.first_local = part.local_of[p.links[0]];
+        for (size_t k = 0; k < p.links.size(); ++k) {
+            if (part.local_of[p.links[k]] != p.first_local + k) {
+                std::cerr << "Error: rank " << part.rank << "'s links for rank " << peer
+                          << " are not contiguous in local index order. Local indices must be "
+                          << "grouped by destination before the exchange is built." << std::endl;
+                exit(EXIT_FAILURE);
+            }
+        }
         ex.send_to.push_back(std::move(p));
     }
 
@@ -165,44 +176,40 @@ double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps)
 }
 
 void SendBoundaries(BoundaryExchange& ex,
-                    const Partition& part,
                     const std::vector<float>& results,
                     size_t n_steps,
                     size_t chunk)
 {
-    // Blocking sends still need somewhere to pack, so there is always at least one slot.
     const size_t slots = static_cast<size_t>(std::max(1, ex.lookahead));
     const size_t slot = chunk % slots;
 
     for (auto& peer : ex.send_to) {
-        if (peer.buffers.empty()) {
-            peer.buffers.resize(slots);
-            peer.requests.assign(slots, MPI_REQUEST_NULL);
-        }
-        // reclaim this slot
-        MPI_Wait(&peer.requests[slot], MPI_STATUS_IGNORE);
+        const size_t count = peer.links.size() * n_steps;
 
-        std::vector<float>& buffer = peer.buffers[slot];
-        buffer.resize(peer.links.size() * n_steps);
-        for (size_t k = 0; k < peer.links.size(); ++k) {
-            const size_t local = part.local_of[peer.links[k]];
-            std::copy(results.begin() + static_cast<std::ptrdiff_t>(local * n_steps),
-                      results.begin() + static_cast<std::ptrdiff_t>((local + 1) * n_steps),
-                      buffer.begin() + static_cast<std::ptrdiff_t>(k * n_steps));
-        }
-        if (ex.lookahead > 0 && buffer.size() <= MAX_MPI_COUNT) {
-            MPI_Isend(buffer.data(), static_cast<int>(buffer.size()), MPI_FLOAT,
+        if (ex.lookahead > 0 && count <= MAX_MPI_COUNT) {
+            // Doesn't block: copy, since the next chunk overwrites `results` before this send completes
+            if (peer.buffers.empty()) {
+                peer.buffers.resize(slots);
+                peer.requests.assign(slots, MPI_REQUEST_NULL);
+            }
+            MPI_Wait(&peer.requests[slot], MPI_STATUS_IGNORE);   // reclaim this slot
+            std::vector<float>& buffer = peer.buffers[slot];
+            buffer.resize(count);
+            std::copy(results.begin() + static_cast<std::ptrdiff_t>(peer.first_local * n_steps),
+                      results.begin() + static_cast<std::ptrdiff_t>(peer.first_local * n_steps + count),
+                      buffer.begin());
+            MPI_Isend(buffer.data(), static_cast<int>(count), MPI_FLOAT,
                       peer.rank, BOUNDARY_TAG, MPI_COMM_WORLD, &peer.requests[slot]);
         } else {
-            // Split messages cannot be pipelined, so send blocking
+            // blocks: send directly from `results`, which nothing overwrites until this returns
             if (ex.lookahead > 0 && !peer.oversize_warned) {
                 std::cerr << "Warning: boundary message to rank " << peer.rank << " is "
-                          << buffer.size() << " floats, past the " << MAX_MPI_COUNT
+                          << count << " floats, past the " << MAX_MPI_COUNT
                           << " MPI can count. Sending it blocking, so lookahead is off"
                           << " for this peer." << std::endl;
                 peer.oversize_warned = true;
             }
-            SendChunked(buffer.data(), buffer.size(), peer.rank);
+            SendChunked(results.data() + peer.first_local * n_steps, count, peer.rank);
         }
     }
 }

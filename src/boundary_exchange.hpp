@@ -26,6 +26,7 @@ struct BoundaryExchange {
     struct Peer {
         int                 rank = 0;   // the other end
         std::vector<size_t> links;      // global link indices, ascending
+        size_t first_local = 0;   // local index of links[0]; group is contiguous from here
         // Send slots, used round robin. A slot cannot be refilled until its own message
         // has left, so the count is how many chunks this rank may run ahead.
         std::vector<std::vector<float>> buffers;   // [slot] of links.size() * n_steps
@@ -96,14 +97,16 @@ double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps);
  * MPI's eager threshold (~256 KB, reached by a 7-day chunk) MPI_Send blocks until the
  * receiver posts its receive, so the ranks advance one at a time.
  *
+ * Blocking sends, including any message too long for one MPI call, go straight from
+ * `results`. Only non-blocking sends copy first, since the next chunk overwrites
+ * `results` while they are in flight.
+ *
  * @param ex The exchange plan.
- * @param part This rank's partition, to find each link's local slice.
  * @param results This rank's solved series, in local index space.
  * @param n_steps Steps in this chunk.
  * @param chunk Index of this chunk, which selects the send slot.
  */
 void SendBoundaries(BoundaryExchange& ex,
-                    const Partition& part,
                     const std::vector<float>& results,
                     size_t n_steps,
                     size_t chunk);

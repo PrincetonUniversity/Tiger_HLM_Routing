@@ -49,8 +49,8 @@ void writeOutput(const ModelSetup& setup,
                  bool is_last_chunk)
 {
     // Every array here is in local index space: a rank writes only the links it owns.
-    // Local indices are assigned in increasing global order, so a single-rank run walks
-    // the same links in the same order as it did before partitioning existed.
+    // A single-rank run's local order is ascending global. A distributed rank's order is grouped
+    // by destination rank, so its files list links in that order; LinkID carries identity.
     const size_t n_owned = part.n_owned();
 
     // A distributed run writes one file per rank; a single-rank run keeps the original
@@ -688,7 +688,7 @@ void ProcessChunk(const ModelSetup& setup,
             }
         }
     // Hand this rank's cut-edge series to the ranks downstream of it.
-    SendBoundaries(ex, part, results, n_steps, tc);
+    SendBoundaries(ex, results, n_steps, tc);
     std::cout << "completed!" << std::endl;
     auto solve_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> solve_elapsed = solve_end - solve_start ;
@@ -729,8 +729,8 @@ void runRouting(const ModelSetup& setup, int rank, int n_ranks){
     // Which links this rank owns. Without mpi.partition_file this is one rank owning
     // everything, with local index == global index, i.e. the behaviour before
     // partitioning existed.
-    const Partition part = LoadPartition(setup.n_links, setup.config.mpi_partition_file,
-                                        rank, n_ranks, setup.config.parameters_file);
+    Partition part = LoadPartition(setup.n_links, setup.config.mpi_partition_file,
+                                   rank, n_ranks, setup.config.parameters_file);
 
     std::vector<float> q_final(part.n_owned()); //final value per owned link, local indices
 
@@ -761,6 +761,9 @@ void runRouting(const ModelSetup& setup, int rank, int n_ranks){
     }
     if (setup.config.traversal == "counter") {
         pending = std::vector<std::atomic<int>>(setup.n_links);
+    }
+    if (part.distributed()) {
+        GroupLocalIndicesByDestination(part, graph.child, DependencyGraph::NO_CHILD);
     }
     BoundaryExchange ex = BuildBoundaryExchange(part, graph);
     int depth = 0;

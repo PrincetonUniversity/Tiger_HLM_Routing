@@ -1,6 +1,7 @@
 #include "partition.hpp"
 
 // C++ standard libraries
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -15,8 +16,8 @@ const char PART_MAGIC[8] = {'H', 'L', 'M', 'P', 'A', 'R', 'T', '1'};
 /**
  * @brief Builds the local index space from an already-filled rank_of.
  *
- * Local indices are handed out in increasing global order. That is what makes a
- * single-rank run the identity map, so it stays comparable to a pre-partition run.
+ * Local indices follow global order, so a single-rank run is the identity map. Multi-rank
+ * runs are regrouped by destination (GroupLocalIndicesByDestination) for contiguous sends.
  */
 void BuildLocalIndices(Partition& part, size_t n_links)
 {
@@ -130,5 +131,22 @@ Partition LoadPartition(size_t n_links,
               << part.n_owned() << " of " << n_links << " links ("
               << (100.0 * part.n_owned() / n_links) << "%)." << std::endl;
     return part;
+}
+
+void GroupLocalIndicesByDestination(Partition& part,
+                                    const std::vector<size_t>& child,
+                                    size_t no_child)
+{
+    // Must be a stable sort: it relies on global_of already being in global order to keep
+    // each destination group ascending, which is the order the receiver expects.
+    auto destination = [&](size_t global) {
+        const size_t c = child[global];
+        return (c == no_child) ? part.rank : part.rank_of[c];
+    };
+    std::stable_sort(part.global_of.begin(), part.global_of.end(),
+                     [&](size_t a, size_t b) { return destination(a) < destination(b); });
+    for (size_t local = 0; local < part.global_of.size(); ++local) {
+        part.local_of[part.global_of[local]] = local;
+    }
 }
 // End of file: Tiger_HLM_Routing/src/partition.cpp
