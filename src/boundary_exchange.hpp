@@ -29,13 +29,19 @@ struct BoundaryExchange {
         size_t first_local = 0;   // local index of links[0]; group is contiguous from here
         // Send slots, used round robin. A slot cannot be refilled until its own message
         // has left, so the count is how many chunks this rank may run ahead.
+        // Receive side: two buffers, alternating by chunk, so the next chunk can arrive while this one solves.
         std::vector<std::vector<float>> buffers;   // [slot] of links.size() * n_steps
         std::vector<MPI_Request>        requests;  // [slot], MPI_REQUEST_NULL when idle
+        std::vector<MPI_Request>        piece_requests[2];  // one per piece, for each of the two chunks in flight
         bool oversize_warned = false;   // the too-big-to-pipeline warning is printed once
     };
 
     std::vector<Peer> recv_from;  // lower ranks; their links are parents of links I own
     std::vector<Peer> send_to;    // higher ranks; my links are parents of links they own
+
+    // True when most of this rank's links leave it
+    bool direct_send = false;
+    bool double_buffered() const { return direct_send && lookahead > 0; }
 
     // Global link index -> its received series. Only remote parents appear here, so it is
     // small: one entry per cut edge arriving at this rank.
@@ -78,13 +84,24 @@ BoundaryExchange BuildBoundaryExchange(const Partition& part, const DependencyGr
  *
  * Blocking, so a rank waiting on an upstream neighbour sleeps rather than spinning.
  *
+ * With lookahead, the receives for the next chunk are posted before this returns, into
+ * the other parity's buffer, so that transfer overlaps this chunk's solve.
+ *
  * After this returns, every remote parent's series is in `arrived`, so a link with only
  * remote parents is genuinely ready and can be seeded like any headwater.
  *
  * @param ex The exchange plan; its buffers are filled.
  * @param n_steps Steps in this chunk.
+ * @param chunk Index of this chunk, which selects the buffer parity.
+ * @param next_n_steps Steps in the next chunk, or 0 after the last one.
+ * @return Seconds spent blocked.
  */
-double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps);
+double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps, size_t chunk, size_t next_n_steps);
+
+/**
+ * @brief Waits for the sends that read from the `results` buffer about to be reused.
+ */
+void WaitSends(BoundaryExchange& ex, int parity);
 
 /**
  * @brief Sends this rank's outgoing boundary series once the chunk is solved.
@@ -98,13 +115,14 @@ double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps);
  * receiver posts its receive, so the ranks advance one at a time.
  *
  * Blocking sends, including any message too long for one MPI call, go straight from
- * `results`. Only non-blocking sends copy first, since the next chunk overwrites
- * `results` while they are in flight.
+ * `results`. Non-blocking sends copy first, since the next chunk overwrites `results`
+ * while they are in flight -- except on a double-buffered rank, which sends every piece
+ * non-blocking straight from `results[chunk % 2]` and waits before that buffer is reused.
  *
  * @param ex The exchange plan.
- * @param results This rank's solved series, in local index space.
+ * @param results This rank's solved series for this chunk, in local index space.
  * @param n_steps Steps in this chunk.
- * @param chunk Index of this chunk, which selects the send slot.
+ * @param chunk Index of this chunk, which selects the send slot or buffer parity.
  */
 void SendBoundaries(BoundaryExchange& ex,
                     const std::vector<float>& results,

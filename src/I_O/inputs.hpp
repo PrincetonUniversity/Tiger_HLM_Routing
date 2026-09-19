@@ -33,6 +33,7 @@ BoundaryConditions readBoundaryConditions(const std::string& filename,
 struct RunoffChunkInfo{
     int nchunks = 1; // Number of chunks
     std::vector<std::string> filenames;
+    std::vector<size_t> ntime;   // time steps in each chunk, known before it is read
 };
 
 RunoffChunkInfo getRunoffChunkInfo(const std::string& path,

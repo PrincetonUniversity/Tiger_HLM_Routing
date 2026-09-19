@@ -18,10 +18,10 @@ constexpr int BOUNDARY_TAG = 7001;
 // Messages longer than an MPI int count are sent in pieces, one tag each
 constexpr size_t MAX_MPI_COUNT = static_cast<size_t>(INT_MAX);
 
-void SendChunked(const float* data, size_t count, int peer_rank)
+void SendChunked(const float* data, size_t count, int peer_rank, int tag_base)
 {
     size_t offset = 0;
-    int tag = BOUNDARY_TAG;
+    int tag = BOUNDARY_TAG + tag_base;
     while (offset < count) {
         const size_t piece = std::min(count - offset, MAX_MPI_COUNT);
         MPI_Send(data + offset, static_cast<int>(piece), MPI_FLOAT,
@@ -31,10 +31,10 @@ void SendChunked(const float* data, size_t count, int peer_rank)
     }
 }
 
-void RecvChunked(float* data, size_t count, int peer_rank)
+void RecvChunked(float* data, size_t count, int peer_rank, int tag_base)
 {
     size_t offset = 0;
-    int tag = BOUNDARY_TAG;
+    int tag = BOUNDARY_TAG + tag_base;
     while (offset < count) {
         const size_t piece = std::min(count - offset, MAX_MPI_COUNT);
         MPI_Recv(data + offset, static_cast<int>(piece), MPI_FLOAT,
@@ -42,6 +42,45 @@ void RecvChunked(float* data, size_t count, int peer_rank)
         offset += piece;
         ++tag;
     }
+}
+
+// Non-blocking forms of the two above: every piece is posted at once and its request
+// appended to `requests`, which the caller waits on before the data may be touched.
+void IsendChunked(const float* data, size_t count, int peer_rank, int tag_base,
+                  std::vector<MPI_Request>& requests)
+{
+    size_t offset = 0;
+    int tag = BOUNDARY_TAG + tag_base;
+    while (offset < count) {
+        const size_t piece = std::min(count - offset, MAX_MPI_COUNT);
+        requests.emplace_back();
+        MPI_Isend(data + offset, static_cast<int>(piece), MPI_FLOAT,
+                  peer_rank, tag, MPI_COMM_WORLD, &requests.back());
+        offset += piece;
+        ++tag;
+    }
+}
+
+void IrecvChunked(float* data, size_t count, int peer_rank, int tag_base,
+                  std::vector<MPI_Request>& requests)
+{
+    size_t offset = 0;
+    int tag = BOUNDARY_TAG + tag_base;
+    while (offset < count) {
+        const size_t piece = std::min(count - offset, MAX_MPI_COUNT);
+        requests.emplace_back();
+        MPI_Irecv(data + offset, static_cast<int>(piece), MPI_FLOAT,
+                  peer_rank, tag, MPI_COMM_WORLD, &requests.back());
+        offset += piece;
+        ++tag;
+    }
+}
+
+void WaitPieces(std::vector<MPI_Request>& requests)
+{
+    if (requests.empty()) return;
+    MPI_Waitall(static_cast<int>(requests.size()), requests.data(), MPI_STATUSES_IGNORE);
+    requests.clear();
 }
 
 } // namespace
@@ -114,9 +153,13 @@ BoundaryExchange BuildBoundaryExchange(const Partition& part, const DependencyGr
     size_t n_in = 0, n_out = 0;
     for (const auto& p : ex.recv_from) n_in += p.links.size();
     for (const auto& p : ex.send_to)   n_out += p.links.size();
+    // if sending most of a rank's links, skip copy and double-buffer `results`
+    ex.direct_send = n_out * 2 > part.n_owned();
     std::cout << "  Boundary exchange: rank " << part.rank << " receives " << n_in
               << " series from " << ex.recv_from.size() << " rank(s), sends " << n_out
-              << " to " << ex.send_to.size() << "." << std::endl;
+              << " to " << ex.send_to.size() << "."
+              << (ex.direct_send ? " Sends straight from a double-buffered results." : "")
+              << std::endl;
     return ex;
 }
 
@@ -155,16 +198,55 @@ int RankGraphDepth(const Partition& part, const DependencyGraph& graph)
     return best;
 }
 
+namespace {
+
+// With lookahead two chunks can be in flight per rank pair, so each parity gets its own
+// tag range. Every send and receive path derives its tags here.
+constexpr int PIECE_STRIDE = 4096;   // pieces per chunk; enough for a year of CONUS level 0
+
+int TagBase(const BoundaryExchange& ex, size_t chunk)
+{
+    return ex.lookahead > 0 ? static_cast<int>(chunk % 2) * PIECE_STRIDE : 0;
+}
+
+// Posts the receives for `chunk` into that parity's buffer without waiting.
+void PostReceives(BoundaryExchange& ex, size_t n_steps, size_t chunk)
+{
+    const int parity = static_cast<int>(chunk % 2);
+    for (auto& peer : ex.recv_from) {
+        if (peer.buffers.size() < 2) peer.buffers.resize(2);
+        std::vector<float>& buffer = peer.buffers[parity];
+        buffer.resize(peer.links.size() * n_steps);
+        IrecvChunked(buffer.data(), buffer.size(), peer.rank, TagBase(ex, chunk),
+                     peer.piece_requests[parity]);
+    }
+}
+
+} // namespace
+
 // Returns the seconds spent blocked
-double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps)
+double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps, size_t chunk, size_t next_n_steps)
 {
     const auto wait_start = std::chrono::high_resolution_clock::now();
     ex.arrived.clear();
+    const int parity = static_cast<int>(chunk % 2);
+
+    if (ex.lookahead > 0) {
+        // Wait for this chunk's receives, then post the next chunk's so it arrives during the solve
+        if (chunk == 0) PostReceives(ex, n_steps, chunk);
+        for (auto& peer : ex.recv_from) WaitPieces(peer.piece_requests[parity]);
+        if (next_n_steps > 0) PostReceives(ex, next_n_steps, chunk + 1);
+    } else {
+        for (auto& peer : ex.recv_from) {
+            if (peer.buffers.empty()) peer.buffers.resize(1);
+            std::vector<float>& buffer = peer.buffers[0];
+            buffer.resize(peer.links.size() * n_steps);
+            RecvChunked(buffer.data(), buffer.size(), peer.rank, 0);
+        }
+    }
+
     for (auto& peer : ex.recv_from) {
-        if (peer.buffers.empty()) peer.buffers.resize(1);
-        std::vector<float>& buffer = peer.buffers[0];
-        buffer.resize(peer.links.size() * n_steps);
-        RecvChunked(buffer.data(), buffer.size(), peer.rank);
+        const std::vector<float>& buffer = peer.buffers[ex.lookahead > 0 ? parity : 0];
         // Both sides pack in ascending global link index, so position determines identity.
         for (size_t k = 0; k < peer.links.size(); ++k) {
             ex.arrived[peer.links[k]] = buffer.data() + k * n_steps;
@@ -175,6 +257,11 @@ double ReceiveBoundaries(BoundaryExchange& ex, size_t n_steps)
     return waited.count();
 }
 
+void WaitSends(BoundaryExchange& ex, int parity)
+{
+    for (auto& peer : ex.send_to) WaitPieces(peer.piece_requests[parity]);
+}
+
 void SendBoundaries(BoundaryExchange& ex,
                     const std::vector<float>& results,
                     size_t n_steps,
@@ -182,11 +269,16 @@ void SendBoundaries(BoundaryExchange& ex,
 {
     const size_t slots = static_cast<size_t>(std::max(1, ex.lookahead));
     const size_t slot = chunk % slots;
+    const int tag_base = TagBase(ex, chunk);
 
     for (auto& peer : ex.send_to) {
         const size_t count = peer.links.size() * n_steps;
+        const float* group = results.data() + peer.first_local * n_steps;
 
-        if (ex.lookahead > 0 && count <= MAX_MPI_COUNT) {
+        if (ex.double_buffered()) {
+            // Doesn't block, no copy
+            IsendChunked(group, count, peer.rank, tag_base, peer.piece_requests[chunk % 2]);
+        } else if (ex.lookahead > 0 && count <= MAX_MPI_COUNT) {
             // Doesn't block: copy, since the next chunk overwrites `results` before this send completes
             if (peer.buffers.empty()) {
                 peer.buffers.resize(slots);
@@ -194,12 +286,9 @@ void SendBoundaries(BoundaryExchange& ex,
             }
             MPI_Wait(&peer.requests[slot], MPI_STATUS_IGNORE);   // reclaim this slot
             std::vector<float>& buffer = peer.buffers[slot];
-            buffer.resize(count);
-            std::copy(results.begin() + static_cast<std::ptrdiff_t>(peer.first_local * n_steps),
-                      results.begin() + static_cast<std::ptrdiff_t>(peer.first_local * n_steps + count),
-                      buffer.begin());
+            buffer.assign(group, group + count);
             MPI_Isend(buffer.data(), static_cast<int>(count), MPI_FLOAT,
-                      peer.rank, BOUNDARY_TAG, MPI_COMM_WORLD, &peer.requests[slot]);
+                      peer.rank, BOUNDARY_TAG + tag_base, MPI_COMM_WORLD, &peer.requests[slot]);
         } else {
             // blocks: send directly from `results`, which nothing overwrites until this returns
             if (ex.lookahead > 0 && !peer.oversize_warned) {
@@ -209,7 +298,7 @@ void SendBoundaries(BoundaryExchange& ex,
                           << " for this peer." << std::endl;
                 peer.oversize_warned = true;
             }
-            SendChunked(results.data() + peer.first_local * n_steps, count, peer.rank);
+            SendChunked(group, count, peer.rank, tag_base);
         }
     }
 }
@@ -220,6 +309,13 @@ void FinishBoundaries(BoundaryExchange& ex)
         for (auto& request : peer.requests) {
             MPI_Wait(&request, MPI_STATUS_IGNORE);
         }
+        WaitPieces(peer.piece_requests[0]);
+        WaitPieces(peer.piece_requests[1]);
+    }
+    // No receives should be outstanding here
+    for (auto& peer : ex.recv_from) {
+        WaitPieces(peer.piece_requests[0]);
+        WaitPieces(peer.piece_requests[1]);
     }
 }
 // End of file: Tiger_HLM_Routing/src/boundary_exchange.cpp

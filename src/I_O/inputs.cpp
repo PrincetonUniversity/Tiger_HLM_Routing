@@ -1,6 +1,7 @@
 #include "inputs.hpp"
 //
 #include <netcdf.h>
+#include <algorithm>
 #include <string>
 #include <iostream>
 #include <fstream>
@@ -103,17 +104,18 @@ RunoffChunkInfo getRunoffChunkInfo(const std::string& path,
 
     // push all filenames into the info struct
     for (auto &filename : sorted_by_name){
+        size_t nTimeSteps = GetNCTimeSize(filename, varname);
         // If chunk_size is 0, treat all files as a single chunk
         if(chunk_size == 0){
-            info.filenames.push_back(filename.c_str()); 
-        } 
+            info.filenames.push_back(filename.c_str());
+            info.ntime.push_back(nTimeSteps);
+        }
         // Chunk files based on user chunk size
         else {
-            // Get number of time steps in the file
-            size_t nTimeSteps = GetNCTimeSize(filename, varname);
             if(nTimeSteps <= chunk_size){
                 // If chunk size is larger than number of time steps or zero, treat as single file
                 info.filenames.push_back(filename.c_str()); // Add the single file path
+                info.ntime.push_back(nTimeSteps);
             }else{
                 //chunk size plus one for the last chunk if required
                 size_t nchunks = nTimeSteps / chunk_size;
@@ -122,6 +124,7 @@ RunoffChunkInfo getRunoffChunkInfo(const std::string& path,
                 }
                 for(int i=0; i < nchunks; ++i){
                     info.filenames.push_back(filename.c_str());
+                    info.ntime.push_back(std::min<size_t>(chunk_size, nTimeSteps - i * chunk_size));
                 }
             }
         }

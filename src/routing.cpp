@@ -616,7 +616,14 @@ void ProcessChunk(const ModelSetup& setup,
     auto solve_start = std::chrono::high_resolution_clock::now();
     // Every series this rank needs from upstream ranks, before any link is solved. The
     // call blocks, so a waiting rank sleeps rather than spinning.
-    const double boundary_wait = ReceiveBoundaries(ex, n_steps);
+    // Next chunk's length, so its receive can be posted now and arrive during this solve
+    size_t next_n_steps = 0;
+    if (tc + 1 < static_cast<size_t>(setup.runoff_info.nchunks)) {
+        const size_t next_t_final = setup.runoff_info.ntime[tc + 1] * setup.config.runoff_resolution;
+        next_n_steps = next_t_final / setup.config.dt;
+    }
+    const double boundary_wait = ReceiveBoundaries(ex, n_steps, tc, next_n_steps);
+    WaitSends(ex, static_cast<int>(tc % 2));
     if (setup.config.traversal == "counter") {
         // Dependency-driven: a link runs as soon as its own upstream links are done.
 #ifdef USE_GPU_LEVEL0
@@ -785,8 +792,10 @@ void runRouting(const ModelSetup& setup, int rank, int n_ranks){
 
     //reserving max size up front
     size_t max_size = static_cast<size_t>(setup.config.chunk_size * setup.config.runoff_resolution * part.n_owned() / setup.config.dt);
-    std::vector<float> results;          // declare the vector
-    results.reserve(max_size);           // reserve memory upfront
+    // Two results buffers when most links are sent, so the next solve overlaps the send
+    const size_t n_results = ex.double_buffered() ? 2 : 1;
+    std::vector<std::vector<float>> results(n_results);
+    for (auto& r : results) r.reserve(max_size);
 
     // Precomputed because the prefetch needs chunk t+1's offset while chunk t is still solving.
     std::vector<size_t> chunk_start(setup.runoff_info.nchunks, 0);
@@ -814,7 +823,7 @@ void runRouting(const ModelSetup& setup, int rank, int n_ranks){
         // Start the next read now, so it overlaps this chunk's integration.
         if (tc + 1 < setup.runoff_info.nchunks) prefetch.start(tc + 1, read_chunk);
         ProcessChunk(setup, part, ex, tc, total_time_steps, q_final, runoff, waited,
-                     prefetch, results, graph, pending, profiler);
+                     prefetch, results[tc % n_results], graph, pending, profiler);
     }
     prefetch.stop();
     FinishBoundaries(ex);   // no message may still be in flight at MPI_Finalize
