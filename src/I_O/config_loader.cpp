@@ -306,13 +306,13 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
     config.dt = parser.getDouble("solver.dt");
     config.rtol = parser.getDouble("solver.rtol");
     config.atol = parser.getDouble("solver.atol");
-    // Which traversal solves the network. Absent, it is the level-synchronous path, so
-    // configs written before this key existed run exactly as they did.
-    config.traversal = parser.getString("solver.traversal", "level");
+    // Which traversal solves the network:
+    // counter traversal is faster, level synchronous traversal is old behavior
+    config.traversal = parser.getString("solver.traversal", "counter");
     if (config.traversal != "level" && config.traversal != "counter") {
         std::cerr << "Warning: unknown solver.traversal '" << config.traversal
-                  << "'. Expected 'level' or 'counter'. Falling back to 'level'." << std::endl;
-        config.traversal = "level";
+                  << "'. Expected 'level' or 'counter'. Falling back to 'counter'." << std::endl;
+        config.traversal = "counter";
     }
 
     // Load parameters
