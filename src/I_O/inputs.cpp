@@ -9,6 +9,7 @@
 #include <vector>
 #include <filesystem>
 #include <set>
+#include <cctype>
 
 #define ERR(e) { std::cerr << "NetCDF error: " << nc_strerror(e) << " at " << __FILE__ << ":" << __LINE__ << std::endl; exit(EXIT_FAILURE); }
 
@@ -265,23 +266,133 @@ RunoffData readTotalRunoff(const std::string& filename,
 
 
 /**
+ * @brief Adds the (LinkID, value) pairs of one snapshot file to map.
+ * @param reject_duplicates Exit if a LinkID is already in map; used when combining
+ *                          per-rank files, where each link must come from exactly one file.
+ */
+static void readSnapshotInto(const std::string& filename,
+                             const std::string& varname,
+                             const std::string& id_varname,
+                             std::unordered_map<int, float>& map,
+                             bool reject_duplicates){
+
+    int ncid, varid, retval, idVarId;
+
+    // Open the NetCDF file read-only
+    if ((retval = nc_open(filename.c_str(), NC_NOWRITE, &ncid))) {
+        ERR(retval);
+    }
+
+    // Get variable ID for snapshot variable (float array)
+    if ((retval = nc_inq_varid(ncid, varname.c_str(), &varid))) {
+        nc_close(ncid);
+        ERR(retval);
+    }
+
+    // Query variable dimensions (expect 1D)
+    int ndims;
+    int dimids[NC_MAX_VAR_DIMS];
+    if ((retval = nc_inq_var(ncid, varid, nullptr, nullptr, &ndims, dimids, nullptr))) {
+        nc_close(ncid);
+        ERR(retval);
+    }
+
+    // Get dimension length
+    size_t dim_size;
+    if ((retval = nc_inq_dimlen(ncid, dimids[0], &dim_size))) {
+        nc_close(ncid);
+        ERR(retval);
+    }
+
+    // Read snapshot data (float array)
+    std::vector<float> data(dim_size);
+    if ((retval = nc_get_var_float(ncid, varid, data.data()))) {
+        nc_close(ncid);
+        ERR(retval);
+    }
+
+    // Get variable ID for ID variable (assumed int)
+    if ((retval = nc_inq_varid(ncid, id_varname.c_str(), &idVarId))) {
+        nc_close(ncid);
+        ERR(retval);
+    }
+
+    // Read the ID variable data
+    std::vector<int> ids(dim_size);
+    if ((retval = nc_get_var_int(ncid, idVarId, ids.data()))) {
+        nc_close(ncid);
+        ERR(retval);
+    }
+
+    // Close NetCDF file now that data is loaded
+    if ((retval = nc_close(ncid))) {
+        std::cerr << "Warning: NetCDF file close error: " << nc_strerror(retval) << std::endl;
+    }
+
+    for (size_t i = 0; i < dim_size; ++i) {
+        if (!reject_duplicates) {
+            map[ids[i]] = data[i];
+        } else if (!map.emplace(ids[i], data[i]).second) {
+            std::cerr << "Error: LinkID " << ids[i] << " in " << filename
+                      << " also appears in another per-rank snapshot file. Remove stale"
+                      << " rank files left by an earlier run." << std::endl;
+            exit(EXIT_FAILURE);
+        }
+    }
+}
+
+
+/**
+ * @brief Lists the per-rank snapshot files <stem>_rank<N>.nc for a filename <stem>.nc, sorted.
+ */
+static std::vector<std::string> findRankSnapshots(const std::string& filename){
+    namespace fs = std::filesystem;
+    const fs::path target(filename);
+    const fs::path dir = target.has_parent_path() ? target.parent_path() : fs::path(".");
+    const std::string prefix = target.stem().string() + "_rank";
+    const std::string ext = target.extension().string();
+
+    std::vector<std::string> files;
+    std::error_code ec;
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
+        const std::string name = entry.path().filename().string();
+        if (name.size() <= prefix.size() + ext.size()
+            || name.compare(0, prefix.size(), prefix) != 0
+            || name.compare(name.size() - ext.size(), ext.size(), ext) != 0) {
+            continue;
+        }
+        const std::string rank = name.substr(prefix.size(), name.size() - prefix.size() - ext.size());
+        if (std::all_of(rank.begin(), rank.end(), [](unsigned char c) { return std::isdigit(c); })) {
+            files.push_back(entry.path().string());
+        }
+    }
+    std::sort(files.begin(), files.end());
+    return files;
+}
+
+
+/**
  * @brief Reads initial conditions for the routing model.
  * @param flag Indicates how to read initial conditions:
  *             0 - Constant value for q0 (initial_value must be provided).
  *             1 - Read from a file (filename, varname, id_varname must be provided).
- * @param initial_value The constant value for q0 if flag is 0.
+ *                 If filename does not exist, the per-rank files <stem>_rank<N>.nc written
+ *                 by a distributed run are read instead.
+ * @param initial_value The constant value for q0 if flag is 0, and for links missing from the file.
  * @param filename The path to the file containing initial conditions if flag is 1.
  * @param varname The name of the variable in the file containing initial conditions.
  * @param id_varname The name of the variable in the file containing link IDs.
- * @return A structure containing initial conditions for each link.
+ * @param n_links Number of links in the network; a warning is printed if the file covers fewer.
+ * @return A function that takes a link ID and returns its initial condition.
  */
 
-std::function<float(int)> loadInitialConditions(const int flag, 
-                                        const float initial_value, 
-                                        const std::string& filename, 
-                                        const std::string& varname, 
-                                        const std::string& id_varname){
-    
+std::function<float(int)> loadInitialConditions(const int flag,
+                                        const float initial_value,
+                                        const std::string& filename,
+                                        const std::string& varname,
+                                        const std::string& id_varname,
+                                        const size_t n_links){
+
 
     // If flag is 0: return constant function
     if (flag == 0) {
@@ -291,63 +402,29 @@ std::function<float(int)> loadInitialConditions(const int flag,
     // If flag is 1: read from netcdf file
     if (flag == 1){
 
-        int ncid, varid, retval, idVarId;
-
-        // Open the NetCDF file read-only
-        if ((retval = nc_open(filename.c_str(), NC_NOWRITE, &ncid))) {
-            ERR(retval);
-        }
-
-        // Get variable ID for snapshot variable (float array)
-        if ((retval = nc_inq_varid(ncid, varname.c_str(), &varid))) {
-            nc_close(ncid);
-            ERR(retval);
-        }
-
-        // Query variable dimensions (expect 1D)
-        int ndims;
-        int dimids[NC_MAX_VAR_DIMS];
-        if ((retval = nc_inq_var(ncid, varid, nullptr, nullptr, &ndims, dimids, nullptr))) {
-            nc_close(ncid);
-            ERR(retval);
-        }
-
-        // Get dimension length
-        size_t dim_size;
-        if ((retval = nc_inq_dimlen(ncid, dimids[0], &dim_size))) {
-            nc_close(ncid);
-            ERR(retval);
-        }
-
-        // Read snapshot data (float array)
-        std::vector<float> data(dim_size);
-        if ((retval = nc_get_var_float(ncid, varid, data.data()))) {
-            nc_close(ncid);
-            ERR(retval);
-        }
-
-        // Get variable ID for ID variable (assumed int)
-        if ((retval = nc_inq_varid(ncid, id_varname.c_str(), &idVarId))) {
-            nc_close(ncid);
-            ERR(retval);
-        }
-
-        // Read the ID variable data
-        std::vector<int> ids(dim_size);
-        if ((retval = nc_get_var_int(ncid, idVarId, ids.data()))) {
-            nc_close(ncid);
-            ERR(retval);
-        }
-
-        // Close NetCDF file now that data is loaded
-        if ((retval = nc_close(ncid))) {
-            std::cerr << "Warning: NetCDF file close error: " << nc_strerror(retval) << std::endl;
-        }
-
-        // Build map from ID to snapshot value
         std::unordered_map<int, float> map;
-        for (size_t i = 0; i < dim_size; ++i) {
-            map[ids[i]] = data[i];
+        if (std::filesystem::exists(filename)) {
+            readSnapshotInto(filename, varname, id_varname, map, false);
+        } else {
+            // Every rank reads all per-rank files, so the previous run's rank count
+            // does not need to match this run's.
+            const std::vector<std::string> parts = findRankSnapshots(filename);
+            if (parts.empty()) {
+                std::cerr << "Error: initial condition file " << filename
+                          << " not found, and no per-rank files (<name>_rank<N>.nc) next to it."
+                          << std::endl;
+                exit(EXIT_FAILURE);
+            }
+            for (const auto& part : parts) {
+                readSnapshotInto(part, varname, id_varname, map, true);
+            }
+            std::cout << "read " << parts.size() << " per-rank files...";
+        }
+
+        if (map.size() < n_links) {
+            std::cerr << "Warning: initial conditions cover " << map.size() << " links but the"
+                      << " network has " << n_links << "; the rest start at " << initial_value
+                      << "." << std::endl;
         }
 
         // Return lookup lambda

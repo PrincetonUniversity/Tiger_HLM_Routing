@@ -40,7 +40,8 @@ ModelSetup setupModel(const char* config_path) {
                                      setup.config.initial_value,
                                      setup.config.initial_conditions_filename,
                                      setup.config.initial_conditions_varname,
-                                     setup.config.initial_conditions_id_varname);
+                                     setup.config.initial_conditions_id_varname,
+                                     setup.n_links);
     std::cout << "completed!" << std::endl;
 
     //read boundary conditions from file if they exist
