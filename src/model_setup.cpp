@@ -26,6 +26,7 @@ ModelSetup setupModel(const char* config_path) {
     std::cout << "Loading user inputs from YAML file...";
     setup.config = ConfigLoader::loadConfig(config_path);
     std::cout << "completed!" << std::endl;
+    std::cout << "  snapshot_per_year: " << (setup.config.snapshot_per_year ? "true" : "false") << std::endl;
 
     // Read node levels from CSV file
     std::cout << "Loading network parameters...";
@@ -39,7 +40,8 @@ ModelSetup setupModel(const char* config_path) {
                                      setup.config.initial_value,
                                      setup.config.initial_conditions_filename,
                                      setup.config.initial_conditions_varname,
-                                     setup.config.initial_conditions_id_varname);
+                                     setup.config.initial_conditions_id_varname,
+                                     setup.n_links);
     std::cout << "completed!" << std::endl;
 
     //read boundary conditions from file if they exist

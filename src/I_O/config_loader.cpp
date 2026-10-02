@@ -275,6 +275,19 @@ double SimpleYamlParser::getDouble(const std::string& key, double defaultValue) 
     return defaultValue;
 }
 
+bool SimpleYamlParser::getBool(const std::string& key, bool defaultValue) {
+    auto it = keyValueMap.find(key);
+    if (it == keyValueMap.end()) {
+        return defaultValue;
+    }
+    std::string val = it->second;
+    std::transform(val.begin(), val.end(), val.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    if (val == "true" || val == "1" || val == "yes") return true;
+    if (val == "false" || val == "0" || val == "no") return false;
+    return defaultValue; // unrecognized value, fall back rather than guess
+}
+
 
 // Implementation of ConfigLoader methods
 ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
@@ -293,13 +306,13 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
     config.dt = parser.getDouble("solver.dt");
     config.rtol = parser.getDouble("solver.rtol");
     config.atol = parser.getDouble("solver.atol");
-    // Which traversal solves the network. Absent, it is the level-synchronous path, so
-    // configs written before this key existed run exactly as they did.
-    config.traversal = parser.getString("solver.traversal", "level");
+    // Which traversal solves the network:
+    // counter traversal is faster, level synchronous traversal is old behavior
+    config.traversal = parser.getString("solver.traversal", "counter");
     if (config.traversal != "level" && config.traversal != "counter") {
         std::cerr << "Warning: unknown solver.traversal '" << config.traversal
-                  << "'. Expected 'level' or 'counter'. Falling back to 'level'." << std::endl;
-        config.traversal = "level";
+                  << "'. Expected 'level' or 'counter'. Falling back to 'counter'." << std::endl;
+        config.traversal = "counter";
     }
 
     // Load parameters
@@ -343,6 +356,14 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
     config.series_filepath = parser.getString("output.series_filepath");
     config.snapshot_filepath = parser.getString("output.snapshot_filepath");
     config.max_output = parser.getInt("output.max_output", 0); // Default to 0 if not specified
+    config.max_output_level = parser.getInt("output.max_output_level", 0);
+    if (config.max_output_level < 0) {
+        std::cerr << "Warning: output.max_output_level " << config.max_output_level
+                  << " set to 0." << std::endl;
+        config.max_output_level = 0;
+    }
+    std::cout << "  Output level filter: timeseries level >= " << config.min_level
+              << ", max_output level >= " << config.max_output_level << std::endl;
     config.max_output_filepath = parser.getString("output.max_output_filepath");
 
     // Absent, the run owns the whole network on one rank
@@ -368,6 +389,7 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
     config.profile_filepath = parser.getString("profiling.filepath", "");
     config.omp_schedule = parser.getString("profiling.omp_schedule", "static");
     config.omp_chunk = parser.getInt("profiling.omp_chunk", 0);
+    config.snapshot_per_year = parser.getString("output.snapshot_per_year", "false") == "true";
     if (config.profile_level_timing == 1 && config.profile_filepath.empty()) {
         std::cerr << "Warning: profiling.level_timing is 1 but profiling.filepath is empty. "
                   << "Disabling per-level timing." << std::endl;

@@ -1,5 +1,6 @@
 #include "node_info.hpp"
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -32,6 +33,8 @@ void read_node_levels(
     std::string line;
     std::getline(file, line); // skip header
 
+    size_t n_bad_params = 0;
+    std::vector<int> bad_examples;
     while (std::getline(file, line)) {
         std::istringstream ss(line);
         std::string token;
@@ -64,13 +67,28 @@ void read_node_levels(
         std::getline(ss, token);
         if (!token.empty()) {
             std::istringstream ps(token);
+            bool bad = false;
             while (std::getline(ps, token, ';')) {
-                if (!token.empty())
+                if (!token.empty()) {
+                    if (token == "inf" || token == "-inf" || token == "nan") bad = true;
                     node.params.push_back(std::stod(token));
+                }
+            }
+            if (bad) {
+                if (n_bad_params < 5) bad_examples.push_back(node.stream_id);
+                ++n_bad_params;
             }
         }
 
         node_map[node.index] = node;
         level_groups[node.level].push_back(node.index);
+    }
+
+    // if there is an inf/nan parameter, warn the user it is being set to 1e-8
+    if (n_bad_params > 0) {
+        std::cerr << "Warning: " << n_bad_params << " link(s) have a non-finite parameter"
+                  << " and are being set to 1e-8, including stream_id";
+        for (int id : bad_examples) std::cerr << " " << id;
+        std::cerr << std::endl;
     }
 }

@@ -33,6 +33,7 @@ BoundaryConditions readBoundaryConditions(const std::string& filename,
 struct RunoffChunkInfo{
     int nchunks = 1; // Number of chunks
     std::vector<std::string> filenames;
+    std::vector<size_t> ntime;   // time steps in each chunk, known before it is read
 };
 
 RunoffChunkInfo getRunoffChunkInfo(const std::string& path,
@@ -78,15 +79,18 @@ RunoffData readTotalRunoff(const std::string& filename,
  * 
  * @param flag Determines the behavior of the function:
  *             - 0: Returns a constant function with the given initial_value.
- *             - 1: Reads initial conditions from a file (not implemented in this snippet).
- * @param initial_value The constant value to return if flag is 0.
+ *             - 1: Reads initial conditions from a file. If it does not exist, reads the
+ *                  per-rank files <stem>_rank<N>.nc written by a distributed run instead.
+ * @param initial_value The constant value to return if flag is 0, and for links missing from the file.
  * @param filename The name of the file to read initial conditions from (if flag is 1).
  * @param varname The variable name in the file containing the initial conditions.
  * @param id_varname The variable name in the file containing link IDs.
+ * @param n_links Number of links in the network; a warning is printed if the file covers fewer.
  * @return A function that takes an integer (link ID) and returns the corresponding initial condition.
  */
-std::function<float(int)> loadInitialConditions(const int flag = 0, 
-                                                const float initial_value = 1.0, 
-                                                const std::string& filename = "", 
-                                                const std::string& varname = "snapshot", 
-                                                const std::string& id_varname="LinkID");
+std::function<float(int)> loadInitialConditions(const int flag = 0,
+                                                const float initial_value = 1.0,
+                                                const std::string& filename = "",
+                                                const std::string& varname = "snapshot",
+                                                const std::string& id_varname="LinkID",
+                                                const size_t n_links = 0);

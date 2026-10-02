@@ -4,6 +4,9 @@
 #include "omp_info.hpp"
 #include "model_setup.hpp"
 #include "routing.hpp"
+#ifdef USE_GPU_LEVEL0
+#include "models/level0_gpu.hpp"
+#endif
 #include "end_info.hpp"
 
 int main(int argc, char* argv[])
@@ -22,6 +25,9 @@ int main(int argc, char* argv[])
     applyOmpSchedule(setup.config.omp_schedule, setup.config.omp_chunk); // Schedule for the link loop
     runRouting(setup, rank, n_ranks); // Run the routing process
     if (rank == 0) printEndInfo(); // Print end information
+#ifdef USE_GPU_LEVEL0
+    FreeLevel0GPU();
+#endif
     MPI_Finalize();
     return 0;
 }

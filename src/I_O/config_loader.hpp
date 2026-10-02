@@ -21,8 +21,7 @@ struct ModelConfig {
     double dt;
     double rtol;
     double atol;
-    std::string traversal; // "level" for the level-synchronous path, "counter" for the
-                           // dependency-driven one. Defaults to "level".
+    std::string traversal; // "counter" for dependency-driven path (default), "level" for level-synchronous path
        
     // Parameters
     std::string parameters_file;
@@ -60,6 +59,7 @@ struct ModelConfig {
     std::string series_filepath; 
     std::string snapshot_filepath; 
     int max_output; // 0 for no max output, 1 for max output
+    int max_output_level; // lowest level written to max_output; default 0, every link
     std::string max_output_filepath;
 
     // Distribution across MPI ranks.
@@ -79,6 +79,7 @@ struct ModelConfig {
     std::string profile_filepath; // path for the per-level CSV, only for flag 1
     std::string omp_schedule; // "static", "dynamic" or "guided" for the link loop
     int omp_chunk; // chunk size for the schedule above, 0 for the OpenMP default
+    bool snapshot_per_year = false; // write one snapshot at end of year instead of every chunk
 
 };
 
@@ -97,6 +98,7 @@ public:
     std::string getString(const std::string& key, const std::string& defaultValue = "");
     int getInt(const std::string& key, int defaultValue = 0);
     double getDouble(const std::string& key, double defaultValue = 0.0);
+    bool getBool(const std::string& key, bool defaultValue = false);
 
 private:
     // Member variables
