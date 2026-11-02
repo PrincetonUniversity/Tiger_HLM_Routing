@@ -35,6 +35,7 @@ void read_node_levels(
 
     size_t n_bad_params = 0;
     std::vector<int> bad_examples;
+    size_t table_params = 0;
     while (std::getline(file, line)) {
         std::istringstream ss(line);
         std::string token;
@@ -80,9 +81,27 @@ void read_node_levels(
             }
         }
 
+        // 4 params (A_h;L;lambda_1;v_0), or 6 with lambda_2 and A_up; one formulation per table
+        const size_t n_params = node.params.size();
+        if (n_params != 4 && n_params != 6) {
+            throw std::runtime_error("Link " + std::to_string(node.stream_id) + " has " + std::to_string(n_params)
+                                     + " params; expected A_h;L;lambda_1;v_0 or A_h;L;lambda_1;v_0;lambda_2;A_up");
+        }
+        if (table_params == 0) table_params = n_params;
+        if (n_params != table_params) {
+            throw std::runtime_error("Link " + std::to_string(node.stream_id) + " has " + std::to_string(n_params)
+                                     + " params but earlier links have " + std::to_string(table_params));
+        }
+        if (n_params == 6 && !(node.params[5] > 0.0)) {
+            throw std::runtime_error("Link " + std::to_string(node.stream_id) + " has non-positive upstream area A_up");
+        }
+
         node_map[node.index] = node;
         level_groups[node.level].push_back(node.index);
     }
+
+    std::cout << "Routing table: " << (table_params == 6 ? "lambda_1 and lambda_2" : "lambda_1 only")
+              << " formulation" << std::endl;
 
     // if there is an inf/nan parameter, warn the user it is being set to 1e-8
     if (n_bad_params > 0) {

@@ -303,7 +303,12 @@ static void SolveLink(const ModelSetup& setup,
         const double A_h = node.params[0]; // hillslope area in m^2
         const double lambda_1 = node.params[2];
         const double L_i = node.params[1]; // stream link length in m
-        const double v_0 = node.params[3]; // reference channel velocity in m/s
+        double v_0 = node.params[3]; // reference channel velocity in m/s
+        // if 6 params, read lambda_2 and upstream area for lambda_2 equation formulation
+        // this formula is duplicated in models/level0_gpu.cu
+        if (node.params.size() == 6) {
+            v_0 *= std::pow(node.params[5] / (setup.config.reference_area_km2 * 1e6), node.params[4]);
+        }
         const double invtau = 60.0 * v_0 / ((1.0 - lambda_1) * L_i);
 
         //runoff pointer

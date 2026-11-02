@@ -25,6 +25,7 @@ struct ModelConfig {
        
     // Parameters
     std::string parameters_file;
+    double reference_area_km2; // A_ref of the lambda_2 term; used only by tables with lambda_2
 
     // Initial conditions
     int initial_conditions_flag;

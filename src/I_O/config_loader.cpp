@@ -317,6 +317,10 @@ ModelConfig ConfigLoader::loadConfig(const std::string& filename) {
 
     // Load parameters
     config.parameters_file = parser.getString("parameters.filename");
+    config.reference_area_km2 = parser.getDouble("parameters.reference_area_km2", 1.0);
+    if (!(config.reference_area_km2 > 0.0)) {
+        throw std::runtime_error("parameters.reference_area_km2 must be positive");
+    }
 
     // Load initial conditions
     config.initial_conditions_flag = parser.getInt("initial_conditions.flag");

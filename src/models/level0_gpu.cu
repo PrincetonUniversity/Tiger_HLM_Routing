@@ -99,7 +99,12 @@ void ensureCtx(const ModelSetup& setup,
         sid[k]  = nd.stream_id;
         ah[k]   = nd.params[0];
         lam[k]  = nd.params[2];
-        itau[k] = 60.0 * nd.params[3] / ((1.0 - lam[k]) * nd.params[1]);
+        // this formula is duplicated in routing.cpp
+        double v_0 = nd.params[3];
+        if (nd.params.size() == 6) {
+            v_0 *= std::pow(nd.params[5] / (setup.config.reference_area_km2 * 1e6), nd.params[4]);
+        }
+        itau[k] = 60.0 * v_0 / ((1.0 - lam[k]) * nd.params[1]);
     }
     g_ctx.built         = true;
     g_ctx.n0            = n0;
